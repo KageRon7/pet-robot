@@ -57,7 +57,7 @@ Gövde takımı (Onur, Eda) ayrıca **Arduino IDE** veya VS Code için **Wokwi**
 - [Yol Haritası](https://claude.ai/code/artifact/11e42fea-e990-47c1-b08e-d989c3d6eeb9): fazlar, kapılar ve kişi kişi görevler.
 - [Teknik Resim](https://claude.ai/artifact/JNkUQR4CiUBz5FAC9yZ1tA): robotun ölçüleri ve servo yerleşimi.
 - [Yüz Atölyesi](https://claude.ai/artifact/7tgRi9gK8AVZMqchB9Hv9t): Tuğra'nın ifade tasarım aracı.
-- [Reşat için Başlangıç Rehberi](https://claude.ai/code/artifact/f6f8d368-a12b-48fb-9626-5e73e70f0614)
+
 
 ## Takvim
 
