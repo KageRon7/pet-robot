@@ -1,0 +1,7 @@
+# Ortak Python paketleri (Python 3.11)
+pydantic          # sözleşmelerin kodu
+opencv-python     # computer_vision: kamera
+mediapipe         # computer_vision: yüz noktaları
+pyserial          # router: ESP32 / Wokwi bağlantısı
+anthropic         # brain: Claude API (gerçek mod)
+python-dotenv     # .env dosyasını okumak için

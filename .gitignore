@@ -1,0 +1,29 @@
+# Gizli ayarlar ve API anahtarları: ASLA GitHub'a gönderilmez
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# Arduino / PlatformIO / Wokwi derleme çıktıları
+.pio/
+build/
+*.bin
+*.elf
+
+# Editör ve işletim sistemi dosyaları
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Kamera kayıtları: projede görüntü saklanmaz
+*.mp4
+*.avi
+recordings/
