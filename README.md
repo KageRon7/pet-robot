@@ -24,24 +24,37 @@ Her klasörün içinde ne yapacağını anlatan kısa bir README var.
 2. **VS Code** ve içinden **Python** eklentisini kur.
 3. Repoyu indir:
    ```bash
-   git clone <repo-linki>
+   git clone https://github.com/KageRon7/pet-robot.git
    cd pet-robot
    ```
+   Repo gizli: önce GitHub'dan gelen davet e-postasını kabul etmen gerekir. "Repository not found" hatası alırsan davet kabul edilmemiştir; Ferhat'a yaz.
 4. Sanal ortam oluştur ve etkinleştir:
    ```bash
-   python -m venv .venv
    # Windows:
+   py -3.11 -m venv .venv
    .venv\Scripts\activate
    # macOS / Linux:
+   python3.11 -m venv .venv
    source .venv/bin/activate
    ```
+   Windows PowerShell "running scripts is disabled" hatası verirse bir kez şunu çalıştır, sonra `activate` komutunu tekrar dene:
+   ```powershell
+   Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+   ```
+   Etkinleşince satırın başında `(.venv)` yazar. Yeni terminal açtığında `activate` komutunu yeniden çalıştırman gerekir.
 5. Paketleri kur:
    ```bash
    pip install -r requirements.txt
    ```
 6. `.env.example` dosyasını kopyalayıp adını `.env` yap. Bu dosya asla GitHub'a gönderilmez.
 
-Gövde takımı (Onur, Eda) ayrıca **Arduino IDE** veya VS Code için **Wokwi** eklentisini kurar; ayrıntılar `firmware/README.md` içinde.
+7. Kurulumun çalıştığını dene:
+   ```bash
+   python -m pytest
+   ```
+   Sonunda `passed` yazıyorsa her şey hazır.
+
+Gövde takımı (Onur, Eda) Faz 0'da hiçbir şey kurmadan tarayıcıda **wokwi.com** kullanır; ayrıntılar `firmware/README.md` içinde.
 
 ## Çalışma kuralları
 
