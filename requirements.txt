@@ -5,3 +5,5 @@ mediapipe         # computer_vision: yüz noktaları
 pyserial          # router: ESP32 / Wokwi bağlantısı
 anthropic         # brain: Claude API (gerçek mod)
 python-dotenv     # .env dosyasını okumak için
+
+pytest            # testler
