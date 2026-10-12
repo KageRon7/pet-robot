@@ -82,13 +82,27 @@ def test_messages_are_frozen():
 
 # ---------- B1 / B2: beyin ----------
 
+# Dokümandaki B1 örneği birebir okunabilmeli.
+def test_brain_context_doc_example():
+    raw = """{
+      "now": "2026-10-11T14:34:00",
+      "current_mood": {"emotion": "idle", "intensity": 0.3},
+      "session": {"user_present_minutes": 47, "last_break_minutes_ago": 47},
+      "recent_events": [{"event": "yawn", "ago_s": 30}, {"event": "drowsy", "ago_s": 5}],
+      "memories": ["Kullanıcı dün de öğleden sonra uykuluydu", "Kullanıcı kedinin kafasını eğmesine güldü"]
+    }"""
+    ctx = BrainContext.from_json(raw)
+    assert ctx.session.user_present_minutes == 47
+    assert ctx.recent_events[-1].event is EventType.DROWSY
+
+
 # Geçerli bir bağlam kurulabilmeli; 5'ten fazla anı reddedilmeli.
 def test_brain_context():
     ctx = BrainContext(
         now="2026-10-12T21:00:00+03:00",
         current_mood={"emotion": "idle", "intensity": 0.2},
-        session={"minutes_at_desk": 45, "minutes_since_break": 20},
-        recent_events=[{"t": 1.0, "event": "smile", "confidence": 0.8, "duration_s": 0}],
+        session={"user_present_minutes": 45, "last_break_minutes_ago": 20},
+        recent_events=[{"event": "smile", "ago_s": 0}],
         memories=["Kullanıcı akşamları yorgun oluyor"],
     )
     assert ctx.recent_events[0].event is EventType.SMILE

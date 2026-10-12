@@ -9,8 +9,7 @@ from datetime import datetime
 
 from pydantic import Field, ValidationError
 
-from .common import ContractModel, Emotion
-from .perception import PerceptionEvent
+from .common import ContractModel, Emotion, EventType
 
 logger = logging.getLogger(__name__)
 
@@ -25,8 +24,15 @@ class Mood(ContractModel):
 class Session(ContractModel):
     """B1 içindeki session: kullanıcının masadaki oturumu (dakika cinsinden)."""
 
-    minutes_at_desk: float = Field(ge=0, description="Kullanıcının masada geçirdiği süre")
-    minutes_since_break: float = Field(ge=0, description="Son moladan beri geçen süre")
+    user_present_minutes: float = Field(ge=0, description="Kullanıcının masada geçirdiği süre")
+    last_break_minutes_ago: float = Field(ge=0, description="Son moladan beri geçen süre")
+
+
+class RecentEvent(ContractModel):
+    """B1 içindeki recent_events öğesi: hangi olay, kaç saniye önce."""
+
+    event: EventType
+    ago_s: float = Field(ge=0, description="Olayın kaç saniye önce olduğu")
 
 
 class BrainContext(ContractModel):
@@ -35,7 +41,7 @@ class BrainContext(ContractModel):
     now: datetime = Field(description="Yerel saat (ISO 8601)")
     current_mood: Mood
     session: Session
-    recent_events: list[PerceptionEvent] = Field(
+    recent_events: list[RecentEvent] = Field(
         default_factory=list, description="Son 5 dakikadaki A2 olayları, en yeni sonda"
     )
     memories: list[str] = Field(

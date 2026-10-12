@@ -5,7 +5,7 @@ Kullanım:
     olay = PerceptionEvent(t=time.time(), event=EventType.SMILE, confidence=0.9, duration_s=0)
 """
 
-from .brain import BrainContext, Decision, Mood, Session
+from .brain import BrainContext, Decision, Mood, RecentEvent, Session
 from .common import CONTRACT_VERSION, ContractModel, Emotion, EventType
 from .motion import PROTOCOL_VERSION, SERIAL_BAUD, SERVO_COUNT, Pose, SerialCommand, SerialReply
 from .perception import MIN_EVENT_CONFIDENCE, FaceTrack, PerceptionEvent
@@ -20,6 +20,7 @@ __all__ = [
     "MIN_EVENT_CONFIDENCE",
     "Mood",
     "Session",
+    "RecentEvent",
     "BrainContext",
     "Decision",
     "Pose",
