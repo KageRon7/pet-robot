@@ -85,3 +85,4 @@ Gövde takımı (Onur, Eda) Faz 0'da hiçbir şey kurmadan tarayıcıda **wokwi.
 -Onur
 -Resat
 -Azat
+-Eda
