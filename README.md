@@ -67,3 +67,6 @@ Gövde takımı (Onur, Eda) ayrıca **Arduino IDE** veya VS Code için **Wokwi**
 | 15–18 Ekim | Faz 1 · tek başına çalışan parçalar | Kapı 1: her modül sahte veriyle çalışır |
 | 19–21 Ekim | Faz 2 · yürüyen iskelet | Kapı 2: gülümse → ekrandaki kedi mutlu |
 | 22–25 Ekim | Faz 3 · yapay zekâ ve sanal ESP32 | Demo: 25 Ekim |
+
+## İsimler 
+-Onur
