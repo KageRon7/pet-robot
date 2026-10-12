@@ -23,6 +23,9 @@ build/
 .DS_Store
 Thumbs.db
 
+# MediaPipe model dosyaları: ilk çalıştırmada otomatik indirilir
+*.task
+
 # Kamera kayıtları: projede görüntü saklanmaz
 *.mp4
 *.avi
