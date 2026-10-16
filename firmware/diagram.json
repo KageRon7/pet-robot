@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "author": "Onur & Eda - Govde Takimi",
+  "editor": "wokwi",
+  "parts": [
+    { "type": "wokwi-esp32-devkit-v1", "id": "esp", "top": 0, "left": 0, "attrs": {} },
+    { "type": "wokwi-servo", "id": "s0_govde", "top": -120, "left": 180, "attrs": { "hornColor": "red" } },
+    { "type": "wokwi-servo", "id": "s1_bas_pan", "top": -40, "left": 180, "attrs": { "hornColor": "blue" } },
+    { "type": "wokwi-servo", "id": "s2_bas_tilt", "top": 40, "left": 180, "attrs": { "hornColor": "green" } },
+    { "type": "wokwi-servo", "id": "s3_sol_kulak", "top": 120, "left": 180, "attrs": { "hornColor": "orange" } },
+    { "type": "wokwi-servo", "id": "s4_sag_kulak", "top": 200, "left": 180, "attrs": { "hornColor": "orange" } }
+  ],
+  "connections": [
+    [ "esp:TX0", "$serialMonitor:RX", "", [] ],
+    [ "esp:RX0", "$serialMonitor:TX", "", [] ],
+    [ "s0_govde:PWM", "esp:D13", "green", [] ],
+    [ "s1_bas_pan:PWM", "esp:D12", "blue", [] ],
+    [ "s2_bas_tilt:PWM", "esp:D14", "yellow", [] ],
+    [ "s3_sol_kulak:PWM", "esp:D27", "orange", [] ],
+    [ "s4_sag_kulak:PWM", "esp:D26", "purple", [] ],
+    [ "s0_govde:V+", "esp:VIN", "red", [] ],
+    [ "s1_bas_pan:V+", "esp:VIN", "red", [] ],
+    [ "s2_bas_tilt:V+", "esp:VIN", "red", [] ],
+    [ "s3_sol_kulak:V+", "esp:VIN", "red", [] ],
+    [ "s4_sag_kulak:V+", "esp:VIN", "red", [] ],
+    [ "s0_govde:GND", "esp:GND.1", "black", [] ],
+    [ "s1_bas_pan:GND", "esp:GND.1", "black", [] ],
+    [ "s2_bas_tilt:GND", "esp:GND.1", "black", [] ],
+    [ "s3_sol_kulak:GND", "esp:GND.1", "black", [] ],
+    [ "s4_sag_kulak:GND", "esp:GND.1", "black", [] ]
+  ]
+}
