@@ -31,9 +31,17 @@ async def sor_ve_oyna(baglam_nesnesi) -> None:
     cevap = await beyne_sor(baglam_nesnesi)
     if cevap is None:
         return
-    print(f"[ROUTER] karar     <- {cevap['emotion']} ({cevap['reason']})")
-    await animasyon_oynat(cevap["emotion"], kaynak="karar", sure_s=cevap["duration_s"])
-
+    try:
+        duygu = str(cevap["emotion"])
+        sure = float(cevap["duration_s"])
+        sebep = cevap.get("reason", "")
+    except (KeyError, TypeError, ValueError, AttributeError) as hata:
+        # Saçma cevap: çökme, idle oynat ve devam et.
+        print(f"[ROUTER] saçma cevap {cevap!r} ({hata!r}), idle'a dönülüyor")
+        await animasyon_oynat("idle", kaynak="hata")
+        return
+    print(f"[ROUTER] karar     <- {duygu} ({sebep})")
+    await animasyon_oynat(duygu, kaynak="karar", sure_s=sure)
 
 async def mesaji_isle(mesaj, baglam: BaglamTutucu) -> None:
     if mesaj.kanal == "A2":
@@ -67,16 +75,15 @@ async def router(kuyruk: asyncio.Queue) -> None:
             kuyruk.task_done()
 
 
-async def main() -> None:
+async def main(sure_s: float = 15, hiz: float = 20) -> None:
     kuyruk: asyncio.Queue = asyncio.Queue(maxsize=100)
-    # Sahte üretecin B2 kararları kapalı: karar artık sahte beyinden (decide) geliyor.
-    uretec = SahteOlayUreteci(tohum=42, hiz=20, kanallar=("A2",))
+    uretec = SahteOlayUreteci(tohum=42, hiz=hiz, kanallar=("A2",))
     gorevler = [
         asyncio.create_task(uretec.kuyruga_aktar(kuyruk, sure_s=300)),
         asyncio.create_task(router(kuyruk)),
     ]
     try:
-        await asyncio.sleep(15)  # demo: 15 sn çalış
+        await asyncio.sleep(sure_s)
     finally:
         for g in gorevler:
             g.cancel()
@@ -84,4 +91,21 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    import sys
+
+    if "--pencere" in sys.argv:
+        # Simülatör penceresiyle, gerçek zamanlı. Tkinter ana thread'de, asyncio arka planda.
+        import threading
+        import tkinter as tk
+
+        from motion.simulator2 import KediSimulatoru
+        from router import animasyon
+        from router.hal import SimulatorHAL
+
+        kok = tk.Tk()
+        simulator = KediSimulatoru(kok)
+        animasyon.hal_ayarla(SimulatorHAL(simulator, kok))
+        threading.Thread(target=lambda: asyncio.run(main(sure_s=120, hiz=1)), daemon=True).start()
+        kok.mainloop()
+    else:
+        asyncio.run(main())
