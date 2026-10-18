@@ -113,16 +113,7 @@ void eda_NotreDon()
   }
   hareketBaslat(target, IDLE_RETURN_MS); // duz durusa doner
 }
-// 1. "move" komutu geldiğinde 5 servonun hedef açısını (S0-S4) ve süreyi (ms) Eda'ya verir
-void eda_HedefeGit(int hedefAcilar[5], int sure_ms) {
-  // Eda burada millis() kullanarak 5 servoyu sure_ms içinde hedefAcilar'a götürecek.
-}
 
-// 2. "neutral" komutu geldiğinde veya 3 sn sigortası attığında Eda motorları nötre çeker
-void eda_NotreDon() {
-  // Eda burada tüm servoları başlangıç (nötr) açılarına götürecek.
-}
-// =========================================================================
 
 
 // Bilgisayara Başarılı ("aldım") Cevabı Gönderen Fonksiyon -> {"ack":42,"ok":true}
