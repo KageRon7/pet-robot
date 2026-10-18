@@ -7,7 +7,18 @@ Kullanım:
 
 from .brain import BrainContext, Decision, Mood, RecentEvent, Session
 from .common import CONTRACT_VERSION, ContractModel, Emotion, EventType
-from .motion import PROTOCOL_VERSION, SERIAL_BAUD, SERVO_COUNT, Pose, SerialCommand, SerialReply
+from .motion import (
+    EAR_DOWN_DEG,
+    EAR_NEUTRAL,
+    EAR_UP_DEG,
+    PROTOCOL_VERSION,
+    SERIAL_BAUD,
+    SERVO_COUNT,
+    Pose,
+    SerialCommand,
+    SerialReply,
+    ear_to_deg,
+)
 from .perception import MIN_EVENT_CONFIDENCE, FaceTrack, PerceptionEvent
 
 __all__ = [
@@ -29,4 +40,8 @@ __all__ = [
     "PROTOCOL_VERSION",
     "SERIAL_BAUD",
     "SERVO_COUNT",
+    "EAR_UP_DEG",
+    "EAR_DOWN_DEG",
+    "EAR_NEUTRAL",
+    "ear_to_deg",
 ]

@@ -15,6 +15,7 @@ from contracts import (
     Pose,
     SerialCommand,
     SerialReply,
+    ear_to_deg,
 )
 
 
@@ -138,6 +139,17 @@ def test_pose_limits():
         Pose(body_yaw=50, head_pan=0, head_tilt=0, ear_left=1, ear_right=1, ms=300)
     with pytest.raises(ValidationError):
         Pose(body_yaw=0, head_pan=0, head_tilt=-20, ear_left=1, ear_right=1, ms=300)
+
+
+# Kulak 0–1 değeri servo derecesine doğru çevrilmeli; sağ kulak ayna gibi ters dönmeli.
+def test_ear_to_deg():
+    assert ear_to_deg(1) == 150
+    assert ear_to_deg(0) == 60
+    assert ear_to_deg(0.8) == 132
+    assert ear_to_deg(1, mirrored=True) == 30
+    assert ear_to_deg(0, mirrored=True) == 120
+    with pytest.raises(ValueError):
+        ear_to_deg(1.2)
 
 
 # ---------- C2: seri protokol ----------
