@@ -96,15 +96,12 @@ if __name__ == "__main__":
     if "--pencere" in sys.argv:
         # Simülatör penceresiyle, gerçek zamanlı. Tkinter ana thread'de, asyncio arka planda.
         import threading
-        import tkinter as tk
 
-        from motion.simulator2 import KediSimulatoru
         from router import animasyon
-        from router.hal import SimulatorHAL
+        from router.hal import simulator_penceresi_kur
 
-        kok = tk.Tk()
-        simulator = KediSimulatoru(kok)
-        animasyon.hal_ayarla(SimulatorHAL(simulator, kok))
+        kok, hal = simulator_penceresi_kur()
+        animasyon.hal_ayarla(hal)
         threading.Thread(target=lambda: asyncio.run(main(sure_s=120, hiz=1)), daemon=True).start()
         kok.mainloop()
     else:

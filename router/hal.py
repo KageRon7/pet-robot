@@ -1,29 +1,36 @@
 """
-HAL (donanım katmanı, taslak).
+HAL (donanım katmanı).
 
-Ne işe yarar: Router'ın poz gönderdiği tek nokta. Router simülatöre mi gerçek
-robota mı konuştuğunu bilmez. pose_gonder bir poz sözlüğü ve geçiş süresi alır.
+Ne işe yarar: Router'ın bir duyguyu oynattığı tek nokta. Router simülatöre mi
+gerçek robota mı konuştuğunu bilmez.
 
-KonsolHAL: sadece ekrana yazar.
-SimulatorHAL: motion/simulator2.py penceresindeki kaydırma çubuklarını oynatır.
+KonsolHAL: pencere yok, sadece ekrana yazar.
+SimulatorHAL: motion/simulator.py'deki KediKontrolcusu'nu kullanır (yüz + motorlar).
+simulator_penceresi_kur(): simülatör penceresini kurar, (pencere, hal) döndürür.
 """
 
 import queue
+from pathlib import Path
+
+KLIP_KLASORU = Path(__file__).resolve().parent.parent / "motion" / "clips"
 
 
 class KonsolHAL:
-    async def pose_gonder(self, poz: dict, sure_ms: float) -> None:
-        print(f"[HAL] poz={poz} süre={sure_ms:.0f}ms")
+    def __init__(self) -> None:
+        self._adlar = {yol.stem for yol in KLIP_KLASORU.glob("*.json")}
+
+    def bilinen(self, duygu: str) -> bool:
+        return duygu in self._adlar
+
+    async def duygu_oynat(self, duygu: str, kaynak: str, sure_s: float) -> None:
+        print(f"[HAL] duygu={duygu} kaynak={kaynak}")
 
 
 class SimulatorHAL:
     """Tkinter ana thread'de çalışır; asyncio başka thread'den buraya komut bırakır."""
 
-    def __init__(self, simulator, pencere) -> None:
-        from motion.simulator2 import EKLEMLER  # tkinter'ı sadece gerekince yükle
-
-        self._araliklar = EKLEMLER
-        self._sim = simulator
+    def __init__(self, kontrolcu, pencere) -> None:
+        self._kontrolcu = kontrolcu
         self._pencere = pencere
         self._kuyruk: queue.Queue = queue.Queue()
         self._bosalt()
@@ -32,16 +39,48 @@ class SimulatorHAL:
         # Tkinter thread'inde 20 ms'de bir kuyruğa bakar ve komutları uygular.
         try:
             while True:
-                ad, hedef, sure_ms = self._kuyruk.get_nowait()
-                self._sim.git(ad, hedef, sure_ms)
+                duygu = self._kuyruk.get_nowait()
+                try:
+                    self._kontrolcu.duygu_cagir(duygu)
+                except Exception as hata:
+                    print(f"[HAL] HATA: {hata!r}")
         except queue.Empty:
             pass
         self._pencere.after(20, self._bosalt)
 
-    async def pose_gonder(self, poz: dict, sure_ms: float) -> None:
-        for ad, hedef in poz.items():
-            if ad not in self._araliklar:
-                continue
-            en_az, en_cok = self._araliklar[ad]
-            hedef = min(en_cok, max(en_az, hedef))  # servo güvenliği: aralığa sıkıştır
-            self._kuyruk.put((ad, hedef, int(sure_ms)))
+    def bilinen(self, duygu: str) -> bool:
+        return self._kontrolcu.klip_bul(duygu) is not None
+
+    async def duygu_oynat(self, duygu: str, kaynak: str, sure_s: float) -> None:
+        self._kuyruk.put(duygu)
+
+
+def simulator_penceresi_kur():
+    """Reşat'ın simülatör penceresini kurar (yüz, motor çubukları, duygu butonları)."""
+    import tkinter as tk
+    from tkinter import ttk
+
+    from motion.klip import KlipYukleyici
+    from motion.simulator import (
+        KLIP_KLASORU as SIM_KLIPLERI,
+        KediKontrolcusu,
+        KediSimulatoru,
+        KlipPaneli,
+        YuzEkrani,
+    )
+
+    klipler = KlipYukleyici.klasorden_yukle(SIM_KLIPLERI)
+    kok = tk.Tk()
+    sol = ttk.Frame(kok)
+    sol.grid(row=0, column=0, padx=8, pady=8, sticky="n")
+    sag = ttk.Frame(kok)
+    sag.grid(row=0, column=1, padx=8, pady=8, sticky="n")
+
+    yuz_ekrani = YuzEkrani(sol)
+    simulator = KediSimulatoru(kok, kap=sag)
+    kontrolcu = KediKontrolcusu(simulator, yuz_ekrani, klipler)
+    KlipPaneli(sol, kontrolcu)
+    kontrolcu.baslat()
+    # Karar klibi bitince düz poza değil idle'a dönmesi istenirse (ekibe sor):
+    # kontrolcu.BITINCE_DAVRANIS = "idle"
+    return kok, SimulatorHAL(kontrolcu, kok)
