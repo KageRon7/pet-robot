@@ -20,6 +20,12 @@ SERVO_COUNT = 5
 ErrorCode = Literal["bad_json", "bad_cmd", "out_of_range"]
 PhysicalAngle = Annotated[int, Field(ge=0, le=180)]
 
+# Kulak (S3/S4) başlangıç kalibrasyonu: C1'deki 0–1 değerinin servoda kaç dereceye denk geldiği.
+# Kesin değerler montajda kulak elle ölçülerek düzeltilir; o gün sadece bu sayılar değişir.
+EAR_UP_DEG = 150  # 1 = kulak dik
+EAR_DOWN_DEG = 60  # 0 = kulak geri yatık
+EAR_NEUTRAL = 0.8  # Dinlenme duruşu: hafif dik, rahat (yaklaşık 132°)
+
 
 class Pose(ContractModel):
     """C1. Mantıksal poz: router'ın HAL'e "nereye bakılsın" demesi."""
@@ -58,6 +64,14 @@ class SerialCommand(ContractModel):
     # Komutu seri porta yazılacak tek satıra çevirir (boş alanlar atılır, sonuna \n eklenir).
     def to_line(self) -> str:
         return self.model_dump_json(exclude_none=True) + "\n"
+
+
+# C1'deki 0–1 kulak değerini servo derecesine çevirir; sağ kulak servosu ayna gibi ters takıldığı için mirrored=True verilir.
+def ear_to_deg(value: float, mirrored: bool = False) -> int:
+    if not 0 <= value <= 1:
+        raise ValueError("kulak değeri 0 ile 1 arasında olmalı")
+    deg = round(EAR_DOWN_DEG + (EAR_UP_DEG - EAR_DOWN_DEG) * value)
+    return 180 - deg if mirrored else deg
 
 
 class SerialReply(ContractModel):

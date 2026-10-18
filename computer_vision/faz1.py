@@ -1,5 +1,6 @@
 """CV olayları (Sözleşme A2): user_arrived, user_left, smile, yawn, drowsy, looking_at_robot_long
-+ duygu ifadeleri: sad, angry, surprised (bunlar sözleşmede YOK, takımla eklenmeli).
++ duygu ifadeleri: sad, angry, surprised (bunlar sözleşmede YOK, takımla eklenmeli)
++ A1 yüz takip akışı (face_track), --track ile.
 
 Kurulum:
     pip install mediapipe opencv-python
@@ -9,8 +10,17 @@ Kurulum:
     python faz1_olaylar.py --track    # A2 olayları + A1 face_track akışı (~15 mesaj/sn)
 
 Başlangıçta yüzün ilk görününce 2 sn "kalibrasyon" yapılır: nötr (ifadesiz) yüzle kameraya bak.
-Duygu skorları bu nötr yüze göre hesaplanır. Yeniden kalibre etmek için 'c' tuşu.
-Çıkış: 'q' veya ESC.
+Duygu skorları bu nötr yüze göre hesaplanır.
+
+Tuşlar:
+    c        yeniden kalibre et (kayıtlı ifade şablonlarını da siler)
+    s/a/u    üzgün / sinirli / şaşkın ifade ŞABLONU kaydet: tuşa bas, 2 sn o ifadeyi yap ve tut.
+             Şablon varsa o duygu, kuralla değil senin kendi yüz ifadene benzerlikle ölçülür.
+             Şablonlar sadece bellekte tutulur, program kapanınca silinir.
+    q / ESC  çıkış
+
+Süreli olaylar (smile, yawn, drowsy, bakış, duygular) ifade bitince değil, süre şartı dolar
+dolmaz ifade hâlâ sürerken, tek kez gönderilir.
 
 Olaylar konsola (stdout) tek satır JSON olarak düşer:
     {"type": "event", "t": 1728648003.5, "event": "smile", "confidence": 0.87, "duration_s": 2.1}
@@ -43,18 +53,21 @@ ARRIVED_SN = 2.0          # sözleşme: yüz en az 2 sn görünsün
 LEFT_SN = 10.0            # sözleşme: yüz en az 10 sn yok
 MIN_CONFIDENCE = 0.6      # sözleşme: bunun altı gönderilmez
 
-SMILE_AC, SMILE_KAPAT, SMILE_MIN_SN = 0.5, 0.35, 0.3
-YAWN_AC, YAWN_KAPAT, YAWN_MIN_SN = 0.5, 0.3, 1.5
+# AC/KAPAT ham blendshape skoruna göredir. REF: "tam ifade" sayılan ham skor; confidence =
+# ham skor / REF. Olayın gönderilebilmesi için confidence >= 0.6 gerekir, yani AC >= 0.6 * REF
+# olmalı (aksi halde olay başlar ama hiç gönderilmez).
+SMILE_AC, SMILE_KAPAT, SMILE_MIN_SN, SMILE_REF = 0.3, 0.2, 0.1, 0.5   # gülümseme anında gider
+YAWN_AC, YAWN_KAPAT, YAWN_MIN_SN, YAWN_REF = 0.4, 0.25, 1.5, 0.65
 
 # drowsy: gözler kısık/kapalı kalma skoru (eyeBlink ortalaması), en az 2 sn sürmeli
 # (normal göz kırpma çok kısa sürdüğü için süre şartı onu eler)
-DROWSY_AC, DROWSY_KAPAT, DROWSY_MIN_SN = 0.5, 0.35, 2.0
+DROWSY_AC, DROWSY_KAPAT, DROWSY_MIN_SN, DROWSY_REF = 0.35, 0.25, 2.0, 0.55
 
 # looking_at_robot_long: baş yönü ve bakış kameraya ne kadar yakın (0–1 "merkezlik" skoru)
 LOOK_AC, LOOK_KAPAT, LOOK_MIN_SN = 0.2, 0.01, 3.0   # sözleşme: 3 sn'den uzun
-YAW_MAX = 25.0     # derece: kafa sağa/sola bu kadar dönünce "bakmıyor"
-PITCH_MAX = 25.0   # derece: kafa yukarı/aşağı bu kadar dönünce "bakmıyor"
-GAZ_MAX = 0.4      # göz bebeği yönü blendshape'lerinin (0–1) kabul edilen en büyük değeri
+YAW_MAX = 30.0     # derece: kafa sağa/sola bu kadar dönünce "bakmıyor"
+PITCH_MAX = 30.0   # derece: kafa yukarı/aşağı bu kadar dönünce "bakmıyor"
+GAZ_MAX = 0.5      # göz bebeği yönü blendshape'lerinin (0–1) kabul edilen en büyük değeri
 
 GOZ_BAKIS = [
     "eyeLookInLeft", "eyeLookOutLeft", "eyeLookUpLeft", "eyeLookDownLeft",
@@ -63,11 +76,16 @@ GOZ_BAKIS = [
 
 # duygu ifadeleri: nötr yüze göre ham skor, "tam ifade" referansına bölünüp 0–1'e çekilir.
 # REF küçüldükçe daha hafif ifadeler de tam sayılır. Hepsi ilk tahmin.
-SAD_REF, ANGRY_REF, SURPRISED_REF = 0.3, 0.4, 0.4
-EMO_AC, EMO_KAPAT, EMO_MIN_SN = 0.6, 0.4, 0.7
+SAD_REF, ANGRY_REF, SURPRISED_REF = 0.2, 0.3, 0.3
+EMO_AC, EMO_KAPAT, EMO_MIN_SN = 0.6, 0.4, 0.4
 
 # Şaşkınlık skoru (0–1) bunun üstündeyse ağız açıklığı "esneme" değil "şaşkınlık" sayılır.
 YAWN_AYRIM = 0.5
+
+# Kayıtlı ifade şablonu: kaç sn kayıt, şablona en az ne kadar benzemeli (kosinüs benzerliği)
+SABLON_SN = 2.0
+SABLON_COS_MIN = 0.4
+SABLON_TUSLARI = {ord("s"): "sad", ord("a"): "angry", ord("u"): "surprised"}
 
 KALIB_SN = 2.0     # nötr yüz kalibrasyon süresi
 
@@ -96,40 +114,55 @@ def olay_gonder(event, t, confidence, duration_s):
 
 
 class SureliOlay:
-    """Bir skor eşiği aşılınca başlar, düşünce biter; süresi yeterliyse olayı gönderir.
+    """Bir skor eşiği aşılınca başlar, düşünce biter. Olayı İFADE SÜRERKEN, TEK KEZ gönderir.
+
+    Gönderme anı: ifade en az min_sure sn sürmüş VE güven (zirve skor / guven_ref, en fazla 1)
+    en az MIN_CONFIDENCE olmalı. İkisi de sağlanır sağlanmaz olay gider; ifadenin bitmesi
+    beklenmez. guven_ref küçüldükçe hafif ifadeler de yüksek güven alır.
+    duration_s, o ana kadar geçen süredir (smile için ~0, yawn/drowsy/bakış için min_sure civarı);
+    ifadenin toplam süresi bilinmez. Aynı ifade devam ettiği sürece tekrar gönderilmez.
 
     Histerezis (ac > kapat) skor eşik civarında titrerken olayın parçalanmasını önler.
-    Olay bittiğinde gönderilir, çünkü duration_s ancak o zaman bilinir.
     """
 
-    def __init__(self, ad, ac, kapat, min_sure):
+    def __init__(self, ad, ac, kapat, min_sure, guven_ref=1.0):
         self.ad, self.ac, self.kapat, self.min_sure = ad, ac, kapat, min_sure
+        self.guven_ref = guven_ref
         self.aktif = False
+        self.gonderildi = False
         self.baslangic = 0.0
         self.zirve = 0.0
 
     def guncelle(self, skor, simdi):
         """skor None ise (yüz yok) açık olay kapatılır."""
         if skor is None:
-            self.bitir(simdi)
+            self.bitir()
             return
         if not self.aktif:
             if skor >= self.ac:
                 self.aktif = True
+                self.gonderildi = False
                 self.baslangic = simdi
                 self.zirve = skor
         else:
             self.zirve = max(self.zirve, skor)
             if skor < self.kapat:
-                self.bitir(simdi)
+                self.bitir()
+                return
+        self._gonder_dene(simdi)
 
-    def bitir(self, simdi):
-        if not self.aktif:
+    def _gonder_dene(self, simdi):
+        if not self.aktif or self.gonderildi:
             return
-        self.aktif = False
         sure = simdi - self.baslangic
-        if sure >= self.min_sure:
-            olay_gonder(self.ad, self.baslangic, self.zirve, sure)
+        guven = min(1.0, self.zirve / self.guven_ref)
+        if sure >= self.min_sure and guven >= MIN_CONFIDENCE:
+            self.gonderildi = True
+            olay_gonder(self.ad, self.baslangic, guven, sure)
+
+    def bitir(self):
+        self.aktif = False
+        self.gonderildi = False
 
 
 class Kalibrasyon:
@@ -196,12 +229,30 @@ def _ort(b, *adlar):
     return sum(b.get(a, 0.0) for a in adlar) / len(adlar)
 
 
-def ifade_skorlari(b, gulme, cene):
+def sablon_skoru(b, sablon):
+    """b'nin kayıtlı ifade şablonuna benzerliği (0–1).
+
+    Önce yön benzerliğine (kosinüs) bakar: ifade şablonla aynı kas desenine sahip değilse 0.
+    Sonra şablonun üzerindeki izdüşümü alır: şablon kadar güçlü ifade = 1.0, yarısı kadar = 0.5.
+    """
+    dot = sum(b.get(k, 0.0) * v for k, v in sablon.items())
+    nn = sum(v * v for v in sablon.values())
+    bb = sum(v * v for v in b.values())
+    if nn == 0 or bb == 0:
+        return 0.0
+    if dot / math.sqrt(nn * bb) < SABLON_COS_MIN:
+        return 0.0
+    return max(0.0, min(1.0, dot / nn))
+
+
+def ifade_skorlari(b, gulme, cene, sablonlar):
     """Nötr yüze göre düzeltilmiş blendshape'lerden sad / angry / surprised / yawn skorları (0–1).
 
     b: kalibrasyon farkı uygulanmış blendshape sözlüğü
     gulme, cene: ham gülümseme ve çene açıklığı skorları
+    sablonlar: {"sad": {...}, ...} kullanıcının kaydettiği ifade şablonları (boş olabilir)
 
+    Bir duygunun şablonu varsa o duygu şablonla, yoksa kuralla hesaplanır.
     Esneme ile şaşkınlığı ayıran şey ağız değil gözler ve kaşlar: şaşkınlıkta gözler
     iri açılır ve kaşlar kalkar, esnemede gözler kısılır. Bu yüzden şaşkınlık skoru
     yüksekse ağız açıklığı esneme sayılmaz; gözler kısıksa şaşkınlık skoru düşer.
@@ -212,35 +263,40 @@ def ifade_skorlari(b, gulme, cene):
     goz_kisik = max(_ort(b, "eyeSquintLeft", "eyeSquintRight"),
                     _ort(b, "eyeBlinkLeft", "eyeBlinkRight"))
 
-    uzgun = (
-        0.4 * _ort(b, "mouthFrownLeft", "mouthFrownRight")
-        + 0.35 * b.get("browInnerUp", 0.0)
-        + 0.25 * b.get("mouthShrugLower", 0.0)
-    )
+    agiz_asagi = _ort(b, "mouthFrownLeft", "mouthFrownRight")
+    ic_kas = b.get("browInnerUp", 0.0)
+    alt_dudak = b.get("mouthShrugLower", 0.0)
+    uzgun = 0.4 * agiz_asagi + 0.35 * ic_kas + 0.25 * alt_dudak
     sinirli = (
         0.6 * _ort(b, "browDownLeft", "browDownRight")
         + 0.2 * _ort(b, "noseSneerLeft", "noseSneerRight")
         + 0.2 * _ort(b, "eyeSquintLeft", "eyeSquintRight")
     )
     saskin = max(0.0, 0.6 * goz_acik + 0.4 * kas_yukari - 0.5 * goz_kisik)
-    saskin_norm = min(1.0, saskin / SURPRISED_REF)
 
     skorlar = {
         "sad": min(1.0, uzgun / SAD_REF),
         "angry": min(1.0, sinirli / ANGRY_REF),
-        "surprised": saskin_norm,
+        "surprised": min(1.0, saskin / SURPRISED_REF),
     }
+    for ad, sablon in sablonlar.items():
+        skorlar[ad] = sablon_skoru(b, sablon)
+
+    saskin_norm = skorlar["surprised"]
     if gulme >= SMILE_KAPAT:
         skorlar["sad"] = skorlar["angry"] = 0.0
-    if cene >= 0.4 or saskin_norm >= YAWN_AYRIM:
-        skorlar["sad"] = 0.0   # ağız açıkken ya da gözler iriyken üzgün sayılmaz
+    if "sad" not in sablonlar and (cene >= 0.4 or saskin_norm >= YAWN_AYRIM):
+        skorlar["sad"] = 0.0   # kural: ağız açıkken ya da gözler iriyken üzgün sayılmaz
 
     baskin = max(skorlar, key=skorlar.get)
     skorlar = {ad: (v if ad == baskin else 0.0) for ad, v in skorlar.items()}
     skorlar["yawn"] = 0.0 if saskin_norm >= YAWN_AYRIM else cene
 
-    debug = (f"uzgun_ham {uzgun:.2f}  goz acik {goz_acik:.2f}  "
-             f"kas yukari {kas_yukari:.2f}  kisik {goz_kisik:.2f}")
+    debug = (
+        f"uzgun_ham {uzgun:.2f}  agiz asagi {agiz_asagi:.2f}  ic kas {ic_kas:.2f}  "
+        f"alt dudak {alt_dudak:.2f}",
+        f"goz acik {goz_acik:.2f}  kas yukari {kas_yukari:.2f}  kisik {goz_kisik:.2f}",
+    )
     return skorlar, debug
 
 
@@ -294,15 +350,20 @@ def main():
     if not kamera.isOpened():
         raise RuntimeError("Webcam açılamadı (indeks 0). Başka uygulama kullanıyor olabilir.")
 
-    smile = SureliOlay("smile", SMILE_AC, SMILE_KAPAT, SMILE_MIN_SN)
-    yawn = SureliOlay("yawn", YAWN_AC, YAWN_KAPAT, YAWN_MIN_SN)
-    drowsy = SureliOlay("drowsy", DROWSY_AC, DROWSY_KAPAT, DROWSY_MIN_SN)
+    smile = SureliOlay("smile", SMILE_AC, SMILE_KAPAT, SMILE_MIN_SN, SMILE_REF)
+    yawn = SureliOlay("yawn", YAWN_AC, YAWN_KAPAT, YAWN_MIN_SN, YAWN_REF)
+    drowsy = SureliOlay("drowsy", DROWSY_AC, DROWSY_KAPAT, DROWSY_MIN_SN, DROWSY_REF)
     bakis = SureliOlay("looking_at_robot_long", LOOK_AC, LOOK_KAPAT, LOOK_MIN_SN)
     sad = SureliOlay("sad", EMO_AC, EMO_KAPAT, EMO_MIN_SN)
     angry = SureliOlay("angry", EMO_AC, EMO_KAPAT, EMO_MIN_SN)
     surprised = SureliOlay("surprised", EMO_AC, EMO_KAPAT, EMO_MIN_SN)
 
     kal = Kalibrasyon(KALIB_SN)
+    sablonlar = {}          # kullanıcının kaydettiği ifade şablonları (sadece bellekte)
+    kayit_ad = None         # şu an hangi ifade kaydediliyor (None = kayıt yok)
+    kayit_bitis = 0.0
+    kayit_toplam = {}
+    kayit_sayi = 0
     son_track = 0.0         # son face_track mesajının zamanı
 
     kullanici_var = False   # user_arrived gönderildi, user_left henüz gönderilmedi
@@ -332,7 +393,7 @@ def main():
 
             gulme = cene = goz = merkez = ifade = None
             yuz_x = yuz_y = None
-            debug = ""
+            debug = ("", "")
 
             if yuz_var:
                 kayip_basi = None
@@ -354,10 +415,23 @@ def main():
 
                 if not kal.bitti:
                     kal.ekle(b, simdi)          # kalibrasyon sürerken duygu skoru yok
+                elif kayit_ad is not None:
+                    # şablon kaydı: nötr yüze göre farkın ortalamasını topla
+                    for k, v in kal.uygula(b).items():
+                        kayit_toplam[k] = kayit_toplam.get(k, 0.0) + v
+                    kayit_sayi += 1
+                    if simdi >= kayit_bitis:
+                        ort = {k: v / kayit_sayi for k, v in kayit_toplam.items()
+                               if not k.startswith("_") and v / kayit_sayi > 0.05}
+                        sablonlar[kayit_ad] = ort
+                        print(f"Sablon kaydedildi: {kayit_ad} ({len(ort)} ozellik)",
+                              file=sys.stderr)
+                        kayit_ad = None
                 else:
-                    ifade, debug = ifade_skorlari(kal.uygula(b), gulme, cene)
+                    ifade, debug = ifade_skorlari(kal.uygula(b), gulme, cene, sablonlar)
             else:
                 gorunme_basi = None
+                kayit_ad = None                 # yüz kaybolursa şablon kaydı iptal
                 if not kal.bitti:
                     kal.sifirla()               # yüz kaybolursa kalibrasyon baştan
                 if kayip_basi is None:
@@ -395,25 +469,41 @@ def main():
             if yuz_var:
                 satir1 = f"gulme: {gulme:.2f}  cene: {cene:.2f}"
                 satir2 = f"goz kapali: {goz:.2f}  bakis: {merkez:.2f}"
-                if ifade is None:
-                    satir3 = "KALIBRASYON: notr yuzle bak"
-                else:
+                if ifade is not None:
                     satir3 = (f"uzgun: {ifade['sad']:.2f}  sinirli: {ifade['angry']:.2f}  "
                               f"saskin: {ifade['surprised']:.2f}")
+                elif kayit_ad is not None:
+                    satir3 = f"KAYIT ({kayit_ad}): ifadeyi yap ve tut"
+                elif not kal.bitti:
+                    satir3 = "KALIBRASYON: notr yuzle bak"
+                else:
+                    satir3 = ""   # kalibrasyon ya da şablon kaydının bittiği kare
                 renk = (0, 255, 255)
             else:
                 satir1, satir2, satir3, renk = "yuz yok", "", "", (0, 0, 255)
             cv2.putText(ekran, satir1, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, renk, 2)
             cv2.putText(ekran, satir2, (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.8, renk, 2)
             cv2.putText(ekran, satir3, (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.8, renk, 2)
-            cv2.putText(ekran, debug, (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.55, renk, 1)
-            cv2.imshow("PET ROBOT CAM", ekran)
+            cv2.putText(ekran, debug[0], (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.5, renk, 1)
+            cv2.putText(ekran, debug[1], (10, 142), cv2.FONT_HERSHEY_SIMPLEX, 0.5, renk, 1)
+            yardim = ("[s] uzgun [a] sinirli [u] saskin kaydet  [c] kalibre   sablon: "
+                      + (" ".join(sorted(sablonlar)) or "yok"))
+            cv2.putText(ekran, yardim, (10, ekran.shape[0] - 12),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+            cv2.imshow("CV olaylari", ekran)
 
             tus = cv2.waitKey(1) & 0xFF
             if tus in (ord("q"), 27):
                 break
             if tus == ord("c"):
                 kal.sifirla()                   # yeniden kalibre et
+                sablonlar.clear()               # taban değişti, eski şablonlar geçersiz
+                kayit_ad = None
+            elif tus in SABLON_TUSLARI and kal.bitti and yuz_var:
+                kayit_ad = SABLON_TUSLARI[tus]
+                kayit_bitis = simdi + SABLON_SN
+                kayit_toplam = {}
+                kayit_sayi = 0
 
     kamera.release()
     cv2.destroyAllWindows()
