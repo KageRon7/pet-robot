@@ -1,14 +1,18 @@
 import asyncio
+import time
 
 from router.animasyon import animasyon_oynat
+from router.beyin_istemcisi import BaglamTutucu, beyne_sor
 from tools.fake_events import SahteOlayUreteci
 
-# REFLEKS TABLOSU (bu bölüm router'ın, yani senin): olay -> (animasyon, süre sn)
-# Olay gelince beyne sormadan hemen oynar.
+# REFLEKS TABLOSU: olay -> (animasyon, süre sn). Beyne sormadan hemen oynar.
 REFLEKS_TABLOSU = {
     "user_arrived": ("idle", 0.0),
-    "smile": ("smile", 1.5),  # küçük gülümseme: kullanıcı gülünce kedi de gülsün
+    "smile": ("smile", 1.5),
 }
+
+# Arka plandaki beyin görevleri; referansı tutmazsak Python görevi silebilir.
+ARKA_GOREVLER: set[asyncio.Task] = set()
 
 
 def ad_al(deger) -> str:
@@ -16,31 +20,45 @@ def ad_al(deger) -> str:
     return str(getattr(deger, "value", deger))
 
 
-async def mesaji_isle(mesaj) -> None:
-    if mesaj.kanal == "A2":
-        olay = ad_al(mesaj.veri.event)
-        if olay in REFLEKS_TABLOSU:
-            # REFLEKS YOLU: beklemeden küçük animasyon
-            animasyon, sure = REFLEKS_TABLOSU[olay]
-            print(f"[ROUTER] refleks   <- {olay}")
-            await animasyon_oynat(animasyon, kaynak="refleks", sure_s=sure)
-        else:
-            # Gerçek sistemde burada B1 bağlamı beyne gönderilecek (Faz 2).
-            print(f"[ROUTER] beyne soruluyor <- {olay}")
+def arka_planda(coro) -> None:
+    gorev = asyncio.create_task(coro)
+    ARKA_GOREVLER.add(gorev)
+    gorev.add_done_callback(ARKA_GOREVLER.discard)
 
-    elif mesaj.kanal == "B2":
-        # KARAR YOLU: beynin kararı gelince duygusuna göre animasyon
-        karar = mesaj.veri
-        duygu = ad_al(karar.emotion)
-        print(f"[ROUTER] karar     <- {duygu} ({karar.reason})")
-        await animasyon_oynat(duygu, kaynak="karar", sure_s=karar.duration_s)
+
+async def sor_ve_oyna(baglam_nesnesi) -> None:
+    # Beyne sorar; cevap gelirse karar animasyonunu oynatır, gelmezse refleksle devam.
+    cevap = await beyne_sor(baglam_nesnesi)
+    if cevap is None:
+        return
+    print(f"[ROUTER] karar     <- {cevap['emotion']} ({cevap['reason']})")
+    await animasyon_oynat(cevap["emotion"], kaynak="karar", sure_s=cevap["duration_s"])
+
+
+async def mesaji_isle(mesaj, baglam: BaglamTutucu) -> None:
+    if mesaj.kanal == "A2":
+        olay = mesaj.veri.event
+        ad = ad_al(olay)
+        simdi = time.time()
+        baglam.olay_ekle(olay, simdi)
+
+        # 1) REFLEKS: beklemeden oynar
+        if ad in REFLEKS_TABLOSU:
+            animasyon, sure = REFLEKS_TABLOSU[ad]
+            print(f"[ROUTER] refleks   <- {ad}")
+            await animasyon_oynat(animasyon, kaynak="refleks", sure_s=sure)
+
+        # 2) BEYİN: refleksten sonra aynı olay için soru gider, router beklemez
+        print(f"[ROUTER] beyne soruluyor <- {ad}")
+        arka_planda(sor_ve_oyna(baglam.olustur(simdi)))
 
 
 async def router(kuyruk: asyncio.Queue) -> None:
+    baglam = BaglamTutucu()
     while True:
         mesaj = await kuyruk.get()
         try:
-            await mesaji_isle(mesaj)
+            await mesaji_isle(mesaj, baglam)
         except Exception as hata:
             # Tek bir bozuk mesaj router'ı çökertmesin; kedi idle'a dönsün.
             print(f"[ROUTER] HATA: {hata!r}, idle'a dönülüyor")
@@ -51,7 +69,8 @@ async def router(kuyruk: asyncio.Queue) -> None:
 
 async def main() -> None:
     kuyruk: asyncio.Queue = asyncio.Queue(maxsize=100)
-    uretec = SahteOlayUreteci(tohum=42, hiz=20, kanallar=("A2", "B2"))
+    # Sahte üretecin B2 kararları kapalı: karar artık sahte beyinden (decide) geliyor.
+    uretec = SahteOlayUreteci(tohum=42, hiz=20, kanallar=("A2",))
     gorevler = [
         asyncio.create_task(uretec.kuyruga_aktar(kuyruk, sure_s=300)),
         asyncio.create_task(router(kuyruk)),
