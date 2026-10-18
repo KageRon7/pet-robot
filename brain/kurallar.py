@@ -4,7 +4,7 @@ from contracts import BrainContext, Decision, Emotion, EventType
 
 
 def _karar(emotion, intensity, duration_s, reason):
-    # Decision modeli yanlış alan ya da değer görürse hata verir (sözleşme kontrolü)
+    # Decision modeli yanlış alan ya da değer görürse hata verir g(sözleşme kontrolü)
     return Decision(emotion=emotion, intensity=intensity, duration_s=duration_s, reason=reason)
 
 
