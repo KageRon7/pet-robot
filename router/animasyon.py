@@ -1,30 +1,39 @@
 """
-Animasyon yolu (taslak).
+Animasyon yolu.
 
-Ne işe yarar: Router'ın animasyon istediği tek nokta burası.
-Şimdilik sadece ekrana yazar. Animasyon sistemi hazır olunca
-_oynat içini HAL / klip seçici çağrısıyla değiştir, router koduna dokunma.
+Ne işe yarar: Router'ın animasyon istediği tek nokta. Duygu adını HAL'a iletir;
+klibi bulup oynatmak (yüz + motorlar) simülatörün işi, süreyi klip belirler.
+Yeni animasyon gelince eskisi kesilir.
 
-Güvenlik: bilinmeyen bir ad gelirse ya da oynatma hata verirse program
-çökmez, idle'a döner.
+Güvenlik: klibi olmayan duygu ya da hata olursa program çökmez, idle'a döner.
 """
 
-# Animasyon sistemindeki bilinen adlar. Yeni klip eklenince buraya da ekle.
-BILINEN = {"idle", "smile", "happy", "sad", "sleepy", "curious", "playful", "startled"}
+from router.hal import KonsolHAL
+
+# Klibi henüz olmayan adlar için geçici eşleme. smile klibi gelince sil.
+TAKMA_AD = {"smile": "happy"}
+
+_hal = KonsolHAL()
 
 
-async def _oynat(ad: str, kaynak: str, sure_s: float) -> None:
-    # İleride burası gerçek animasyon / klip çağrısı olacak.
-    print(f"[ANİMASYON] {ad:<9} kaynak={kaynak}  süre={sure_s}s")
+def hal_ayarla(hal) -> None:
+    """Demo ya da ana program hangi HAL'ın kullanılacağını buradan seçer."""
+    global _hal
+    _hal = hal
 
 
 async def animasyon_oynat(ad: str, kaynak: str, sure_s: float = 0.0) -> None:
-    if ad not in BILINEN:
-        print(f"[ANİMASYON] UYARI: bilinmeyen '{ad}', idle'a dönülüyor")
-        ad, sure_s = "idle", 0.0
+    gercek = TAKMA_AD.get(ad, ad)
     try:
-        await _oynat(ad, kaynak, sure_s)
+        if not _hal.bilinen(gercek):
+            print(f"[ANİMASYON] UYARI: '{ad}' için klip yok, idle'a dönülüyor")
+            gercek = "idle"
+        print(f"[ANİMASYON] {gercek:<9} kaynak={kaynak}")
+        await _hal.duygu_oynat(gercek, kaynak, sure_s)
     except Exception as hata:
         print(f"[ANİMASYON] HATA: {hata!r}, idle'a dönülüyor")
-        if ad != "idle":
-            await _oynat("idle", "hata", 0.0)
+        if gercek != "idle":
+            try:
+                await _hal.duygu_oynat("idle", "hata", 0.0)
+            except Exception as hata2:
+                print(f"[ANİMASYON] idle de oynatılamadı: {hata2!r}")

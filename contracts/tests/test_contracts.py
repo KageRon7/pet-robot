@@ -51,6 +51,13 @@ def test_event_from_json():
     assert msg.event is EventType.SMILE
 
 
+# Mustafa'nın yüz ifadesi olayları (üzgün, sinirli, şaşkın) kabul edilmeli.
+@pytest.mark.parametrize("olay", ["sad", "angry", "surprised"])
+def test_event_accepts_expression_events(olay):
+    msg = PerceptionEvent(t=1.0, event=olay, confidence=0.7, duration_s=0)
+    assert msg.event == olay
+
+
 # Liste dışı olay, düşük güven ve fazladan alan reddedilmeli.
 @pytest.mark.parametrize(
     "changes",
