@@ -27,21 +27,22 @@ def arka_planda(coro) -> None:
 
 
 async def sor_ve_oyna(baglam_nesnesi) -> None:
-    # Beyne sorar; cevap gelirse karar animasyonunu oynatır, gelmezse refleksle devam.
+    # Beyne sorar; cevap (Decision) gelirse karar animasyonunu oynatır, gelmezse refleksle devam.
     cevap = await beyne_sor(baglam_nesnesi)
     if cevap is None:
         return
     try:
-        duygu = str(cevap["emotion"])
-        sure = float(cevap["duration_s"])
-        sebep = cevap.get("reason", "")
-    except (KeyError, TypeError, ValueError, AttributeError) as hata:
+        duygu = ad_al(cevap.emotion)
+        sure = float(cevap.duration_s)
+        sebep = cevap.reason
+    except (AttributeError, TypeError, ValueError) as hata:
         # Saçma cevap: çökme, idle oynat ve devam et.
         print(f"[ROUTER] saçma cevap {cevap!r} ({hata!r}), idle'a dönülüyor")
         await animasyon_oynat("idle", kaynak="hata")
         return
     print(f"[ROUTER] karar     <- {duygu} ({sebep})")
     await animasyon_oynat(duygu, kaynak="karar", sure_s=sure)
+
 
 async def mesaji_isle(mesaj, baglam: BaglamTutucu) -> None:
     if mesaj.kanal == "A2":
@@ -77,6 +78,7 @@ async def router(kuyruk: asyncio.Queue) -> None:
 
 async def main(sure_s: float = 15, hiz: float = 20) -> None:
     kuyruk: asyncio.Queue = asyncio.Queue(maxsize=100)
+    # Sahte üretecin B2 kararları kapalı: karar beyinden (brain/kurallar.py) geliyor.
     uretec = SahteOlayUreteci(tohum=42, hiz=hiz, kanallar=("A2",))
     gorevler = [
         asyncio.create_task(uretec.kuyruga_aktar(kuyruk, sure_s=300)),

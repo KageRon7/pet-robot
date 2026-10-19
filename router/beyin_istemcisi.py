@@ -3,12 +3,11 @@ Beyne soru sorma yolu.
 
 Ne işe yarar: Router'ın bir olay için beyne B1 bağlamı gönderdiği yer.
 Soru ayrı görevde gider, router beklemez. Cevap gelmezse (zaman aşımı,
-hata, beyin henüz yok) None döner ve kedi refleksle devam eder.
-Gerçek beyin gelince sadece _beyne_gonder içini değiştir.
+hata) None döner ve kedi refleksle devam eder.
+Beyin: brain/kurallar.py -> decide(B1) -> Decision (B2).
 """
 
 import asyncio
-
 from datetime import datetime
 
 from contracts import BrainContext, Emotion, Mood, RecentEvent, Session
@@ -45,13 +44,10 @@ class BaglamTutucu:
 
 
 async def _beyne_gonder(baglam: BrainContext):
-    # Dosya adını brain klasöründeki gerçek dosyana göre düzelt.
-    # Örnek: dosya brain/fake_brain.py ise: from brain.fake_brain import decide
-    from brain.tests.fake_brain import decide
+    from brain.kurallar import decide
 
     print(f"[BEYİN-SORU] gönderildi ({len(baglam.recent_events)} son olay)")
     # decide senkron bir fonksiyon; ayrı thread'de çalıştırıyoruz ki router donmasın.
-    # Gerçek LLM gelince sadece bu satır değişir.
     return await asyncio.to_thread(decide, baglam)
 
 
