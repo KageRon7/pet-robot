@@ -28,6 +28,9 @@ OLAY_DUYGU: dict[EventType, list[Emotion]] = {
     EventType.YAWN: [Emotion.SLEEPY],
     EventType.DROWSY: [Emotion.SLEEPY],
     EventType.LOOKING_AT_ROBOT_LONG: [Emotion.CURIOUS, Emotion.PLAYFUL],
+    EventType.SAD: [Emotion.SAD],
+    EventType.ANGRY: [Emotion.STARTLED],
+    EventType.SURPRISED: [Emotion.CURIOUS],
 }
 
 NEDENLER: dict[EventType, str] = {
@@ -37,6 +40,9 @@ NEDENLER: dict[EventType, str] = {
     EventType.YAWN: "Kullanıcı esniyor, ben de uykuluyum",
     EventType.DROWSY: "Kullanıcı uyukluyor",
     EventType.LOOKING_AT_ROBOT_LONG: "Kullanıcı bana uzun süre baktı",
+    EventType.SAD: "Kullanıcı üzgün görünüyor",
+    EventType.ANGRY: "Kullanıcı sinirli, ürktüm",
+    EventType.SURPRISED: "Kullanıcı şaşırdı, merak ettim",
 }
 
 ANI_NOTLARI: dict[EventType, str] = {
@@ -46,6 +52,9 @@ ANI_NOTLARI: dict[EventType, str] = {
     EventType.YAWN: "Kullanıcı bu saatte yorgundu",
     EventType.DROWSY: "Kullanıcı bu saatte uyukladı",
     EventType.LOOKING_AT_ROBOT_LONG: "Kullanıcı kediyle ilgilendi",
+    EventType.SAD: "Kullanıcı bu saatte üzgündü",
+    EventType.ANGRY: "Kullanıcı bu saatte sinirliydi",
+    EventType.SURPRISED: "Kullanıcı bu saatte şaşırdı",
 }
 
 

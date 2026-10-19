@@ -20,6 +20,10 @@ class EventType(StrEnum):
     YAWN = "yawn"
     DROWSY = "drowsy"
     LOOKING_AT_ROBOT_LONG = "looking_at_robot_long"
+    # 19 Ekim (Ferhat onayı): Mustafa'nın yüz ifadesi olayları
+    SAD = "sad"  # kullanıcı üzgün görünüyor -> önerilen tepki: sad
+    ANGRY = "angry"  # kullanıcı sinirli görünüyor -> önerilen tepki: startled
+    SURPRISED = "surprised"  # kullanıcı şaşkın görünüyor -> önerilen tepki: curious
 
 
 class Emotion(StrEnum):
