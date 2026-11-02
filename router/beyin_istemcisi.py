@@ -4,10 +4,15 @@ Beyne soru sorma yolu.
 Ne işe yarar: Router'ın bir olay için beyne B1 bağlamı gönderdiği yer.
 Soru ayrı görevde gider, router beklemez. Cevap gelmezse (zaman aşımı,
 hata) None döner ve kedi refleksle devam eder.
-Beyin: brain/kurallar.py -> decide(B1) -> Decision (B2).
+Hangi beyin? .env dosyasındaki BEYIN ayarı seçer:
+  BEYIN=kurallar (varsayılan) -> brain/kurallar.py
+  BEYIN=claude                -> brain/claude_beyin.py, gerçek Claude (ANTHROPIC_API_KEY gerekir)
+  BEYIN=sahte                 -> brain/claude_beyin.py, sahte Claude (anahtarsız deneme)
+Claude beyni sorun yaşarsa kendisi kural beynine döner.
 """
 
 import asyncio
+import os
 from datetime import datetime
 
 from contracts import BrainContext, Emotion, Mood, RecentEvent, Session
@@ -43,10 +48,45 @@ class BaglamTutucu:
         )
 
 
+_claude_beyin = None  # Claude beyni bir kez kurulur, sonra hep aynısı kullanılır
+_secim_yapildi = False  # .env bir kez okunur
+
+
+# .env'deki BEYIN ayarına göre Claude beynini bir kez kurar; kural beyni seçiliyse None döner.
+def _claude_beynini_al():
+    global _claude_beyin, _secim_yapildi
+    if not _secim_yapildi:
+        _secim_yapildi = True
+        try:
+            from dotenv import load_dotenv
+
+            load_dotenv()
+        except ImportError:
+            pass
+        secim = os.environ.get("BEYIN", "kurallar").strip().lower()
+        if secim not in ("claude", "sahte"):
+            print("[BEYİN] kural beyni kullanılıyor")
+            return None
+        from brain.claude_beyin import ClaudeBeyin, GercekClaudeIstemci, SahteClaudeIstemci
+
+        try:
+            istemci = GercekClaudeIstemci() if secim == "claude" else SahteClaudeIstemci()
+        except Exception as hata:  # anahtar yoksa kedi kural beyniyle devam eder
+            print(f"[BEYİN] Claude beyni kurulamadı ({hata}), kural beyni kullanılıyor")
+            return None
+        _claude_beyin = ClaudeBeyin(istemci)
+        print(f"[BEYİN] {secim} beyni kullanılıyor")
+    return _claude_beyin
+
+
+# Bağlamı seçili beyne gönderir ve kararı döner.
 async def _beyne_gonder(baglam: BrainContext):
     from brain.kurallar import decide
 
     print(f"[BEYİN-SORU] gönderildi ({len(baglam.recent_events)} son olay)")
+    claude = _claude_beynini_al()
+    if claude is not None:
+        return await claude.karar_ver(baglam)
     # decide senkron bir fonksiyon; ayrı thread'de çalıştırıyoruz ki router donmasın.
     return await asyncio.to_thread(decide, baglam)
 
