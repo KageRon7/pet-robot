@@ -31,3 +31,6 @@ desktop.ini
 *.mp4
 *.avi
 recordings/
+
+# Dijital ikiz raporu: her çalıştırmada yeniden yazılır
+sim/rapor.md
