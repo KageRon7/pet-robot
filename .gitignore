@@ -34,3 +34,5 @@ recordings/
 
 # Dijital ikiz raporu: her çalıştırmada yeniden yazılır
 sim/rapor.md
+sim/panel_verisi.json
+sim/panel/kedi_tezgahi.html

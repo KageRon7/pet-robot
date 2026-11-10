@@ -46,6 +46,7 @@ class Bulgu:
     sorun: str
     detay: str
     t: float
+    parca: str = ""  # sorunlu parça: "kafa-govde", "S0", "taban", "guc"
 
 
 @dataclass
@@ -79,14 +80,16 @@ class Gozlemci:
         self._hata_sure = np.zeros(5)    # her servonun 5° üstü geride kaldığı süre
         self._akim = deque()
         self._akim_toplam = 0.0
+        self._akim_t = 0.0
         self._en_kotu: Dict[str, Bulgu] = {}
 
     # Aynı türden bulguların en kötüsünü tutar (rapor kısa kalsın).
-    def _bildir(self, anahtar: str, seviye: str, sorun: str, detay: str, t: float, puan: float) -> None:
+    def _bildir(self, anahtar: str, seviye: str, sorun: str, detay: str, t: float, puan: float,
+                parca: str = "") -> None:
         eski = self._en_kotu.get(anahtar)
         sira = {"SARI": 0, "KIRMIZI": 1}
         if eski is None or (sira[seviye], puan) > (sira[eski.seviye], eski._puan):
-            b = Bulgu(seviye, sorun, detay, t)
+            b = Bulgu(seviye, sorun, detay, t, parca)
             b._puan = puan
             self._en_kotu[anahtar] = b
 
@@ -99,53 +102,54 @@ class Gozlemci:
             if mm < s.en_kucuk_bosluk[1]:
                 s.en_kucuk_bosluk = (cift, mm)
             if mm < 0:
-                self._bildir("bosluk", "KIRMIZI", "Çarpışma", f"{cift.replace('-', ' ↔ ')} {-mm:.1f} mm iç içe", o.t, -mm)
+                self._bildir("bosluk", "KIRMIZI", "Çarpışma", f"{cift.replace('-', ' ↔ ')} {-mm:.1f} mm iç içe", o.t, -mm, cift)
             elif mm < BOSLUK_SARI_MM:
-                self._bildir("bosluk", "SARI", "Çok yakın geçiş", f"{cift.replace('-', ' ↔ ')} arası {mm:.1f} mm", o.t, -mm)
+                self._bildir("bosluk", "SARI", "Çok yakın geçiş", f"{cift.replace('-', ' ↔ ')} arası {mm:.1f} mm", o.t, -mm, cift)
         # 2. Zorlanma ve 3. Yetişememe
         for i in range(5):
             s.en_yuksek_tork[i] = max(s.en_yuksek_tork[i], float(o.tork_oran[i]))
             s.en_buyuk_hata[i] = max(s.en_buyuk_hata[i], abs(float(o.hata_derece[i])))
             self._tork_sure[i] = self._tork_sure[i] + sure if o.tork_oran[i] >= TAM_TORK else 0
             if self._tork_sure[i] * 1000 >= TORK_KIRMIZI_MS:
-                self._bildir(f"tork{i}", "KIRMIZI", "Motor takılıyor", f"{SERVO_ADLARI[i]} {self._tork_sure[i]*1000:.0f} ms tam torkta", o.t, self._tork_sure[i])
+                self._bildir(f"tork{i}", "KIRMIZI", "Motor takılıyor", f"{SERVO_ADLARI[i]} {self._tork_sure[i]*1000:.0f} ms tam torkta", o.t, self._tork_sure[i], f"S{i}")
             hata = abs(float(o.hata_derece[i]))
             self._hata_sure[i] = self._hata_sure[i] + sure if hata > HATA_SARI_DERECE else 0
             if self._hata_sure[i] * 1000 >= HATA_SURE_MS:
                 seviye = "KIRMIZI" if self._hata_sure[i] * 1000 >= HATA_KIRMIZI_MS else "SARI"
-                self._bildir(f"hata{i}", seviye, "Motor yetişemiyor", f"{SERVO_ADLARI[i]} hedefin {hata:.0f}° gerisinde ({self._hata_sure[i]*1000:.0f} ms)", o.t, hata)
+                self._bildir(f"hata{i}", seviye, "Motor yetişemiyor", f"{SERVO_ADLARI[i]} hedefin {hata:.0f}° gerisinde ({self._hata_sure[i]*1000:.0f} ms)", o.t, hata, f"S{i}")
         # 4. Devrilme / kayma / dönme
         s.en_buyuk_egim = max(s.en_buyuk_egim, o.egim_derece)
         s.en_buyuk_kayma = max(s.en_buyuk_kayma, o.kayma_mm)
         s.en_buyuk_donme = max(s.en_buyuk_donme, abs(o.donme_derece))
         if o.egim_derece > EGIM_SARI:
-            self._bildir("egim", "KIRMIZI" if o.egim_derece > EGIM_KIRMIZI else "SARI", "Devrilme eğilimi", f"taban {o.egim_derece:.1f}° kalkıyor", o.t, o.egim_derece)
+            self._bildir("egim", "KIRMIZI" if o.egim_derece > EGIM_KIRMIZI else "SARI", "Devrilme eğilimi", f"taban {o.egim_derece:.1f}° kalkıyor", o.t, o.egim_derece, "taban")
         if o.kayma_mm > KAYMA_SARI_MM:
-            self._bildir("kayma", "KIRMIZI" if o.kayma_mm > KAYMA_KIRMIZI_MM else "SARI", "Masada kayıyor", f"taban {o.kayma_mm:.1f} mm kaydı", o.t, o.kayma_mm)
+            self._bildir("kayma", "KIRMIZI" if o.kayma_mm > KAYMA_KIRMIZI_MM else "SARI", "Masada kayıyor", f"taban {o.kayma_mm:.1f} mm kaydı", o.t, o.kayma_mm, "taban")
         if abs(o.donme_derece) > DONME_SARI:
-            self._bildir("donme", "KIRMIZI" if abs(o.donme_derece) > DONME_KIRMIZI else "SARI", "Masada dönüyor", f"taban {abs(o.donme_derece):.1f}° döndü", o.t, abs(o.donme_derece))
+            self._bildir("donme", "KIRMIZI" if abs(o.donme_derece) > DONME_KIRMIZI else "SARI", "Masada dönüyor", f"taban {abs(o.donme_derece):.1f}° döndü", o.t, abs(o.donme_derece), "taban")
         # 5. Akım (20 ms kayan ortalama)
         self._akim.append((o.t, o.akim_a))
         self._akim_toplam += o.akim_a
         while self._akim and o.t - self._akim[0][0] > AKIM_PENCERE_MS / 1000:
             self._akim_toplam -= self._akim.popleft()[1]
         ort = self._akim_toplam / len(self._akim)
-        s.en_yuksek_akim = max(s.en_yuksek_akim, ort)
+        if ort > s.en_yuksek_akim:
+            s.en_yuksek_akim, self._akim_t = ort, o.t
 
     # Senaryo bitince akım bulgusunu ekler ve sonucu döndürür.
     def bitir(self, adaptor_a: float) -> SenaryoSonucu:
         s = self.s
         if s.en_yuksek_akim > adaptor_a:
-            self._bildir("akim", "KIRMIZI", "Adaptör yetmiyor", f"anlık {s.en_yuksek_akim:.1f} A > {adaptor_a:.0f} A", s.sure_s, s.en_yuksek_akim)
+            self._bildir("akim", "KIRMIZI", "Adaptör yetmiyor", f"anlık {s.en_yuksek_akim:.1f} A > {adaptor_a:.0f} A", self._akim_t, s.en_yuksek_akim, "guc")
         elif s.en_yuksek_akim > 0.8 * adaptor_a:
-            self._bildir("akim", "SARI", "Adaptör sınırda", f"anlık {s.en_yuksek_akim:.1f} A (sınır {adaptor_a:.0f} A)", s.sure_s, s.en_yuksek_akim)
+            self._bildir("akim", "SARI", "Adaptör sınırda", f"anlık {s.en_yuksek_akim:.1f} A (sınır {adaptor_a:.0f} A)", self._akim_t, s.en_yuksek_akim, "guc")
         s.bulgular = sorted(self._en_kotu.values(), key=lambda b: (b.seviye != "KIRMIZI", b.t))
         return s
 
 
 # Bir komut listesini ikizde oynatır, sonra robotun durulması için 0.5 s bekler.
 def senaryo_oynat(ikiz: DijitalIkiz, ad: str, komutlar: List[Komut],
-                  her_adimda: Callable[[DijitalIkiz], None] | None = None) -> SenaryoSonucu:
+                  her_olcumde: Callable[[DijitalIkiz, object], None] | None = None) -> SenaryoSonucu:
     ikiz.sifirla()
     goz = Gozlemci(ad, ikiz.dt)
     olcum_araligi = 10  # her 10 adımda (5 ms) bir ölç
@@ -159,9 +163,10 @@ def senaryo_oynat(ikiz: DijitalIkiz, ad: str, komutlar: List[Komut],
         ikiz.adim()
         adim += 1
         if adim % olcum_araligi == 0:
-            goz.izle(ikiz.olc(), olcum_araligi)
-        if her_adimda:
-            her_adimda(ikiz)
+            o = ikiz.olc()
+            goz.izle(o, olcum_araligi)
+            if her_olcumde:
+                her_olcumde(ikiz, o)
     return goz.bitir(ikiz.robot.adaptor_a)
 
 
