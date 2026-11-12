@@ -1,0 +1,923 @@
+<title>Kedi Deneme Tezgâhı</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Nunito+Sans:opsz,wght@6..12,400;6..12,600;6..12,800&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Düzen: solda tezgâhtaki 3B kedi + zaman çizgisi, sağda senaryo listesi ve göstergeler, altta sade dilde bulgular */
+:root{
+  --bg:#EDF1F0; --panel:#FFFFFF; --ink:#1B2326; --muted:#566468; --line:#D2DBD9; --stage:#E2E9E7;
+  --accent:#0E756D; --accent-soft:#D9EEEB; --accent-ink:#FFFFFF;
+  --ok:#2E7A4D; --warn:#9C5800; --bad:#BF2F38; --ok-soft:#DFF1E6; --warn-soft:#FCEBD3; --bad-soft:#F9DEE0;
+  --font-display:'Fredoka','Nunito Sans',system-ui,sans-serif;
+  --font-body:'Nunito Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --font-mono:'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace;
+  --radius:14px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#10171A; --panel:#172024; --ink:#E4EBEA; --muted:#9AA9A9; --line:#29363A; --stage:#0C1215;
+  --accent:#4FC0B4; --accent-soft:#163835; --accent-ink:#06201D;
+  --ok:#6FCF97; --warn:#F1B05A; --bad:#FF7070; --ok-soft:#173326; --warn-soft:#3A2A12; --bad-soft:#3D1C1F; color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#10171A; --panel:#172024; --ink:#E4EBEA; --muted:#9AA9A9; --line:#29363A; --stage:#0C1215;
+  --accent:#4FC0B4; --accent-soft:#163835; --accent-ink:#06201D;
+  --ok:#6FCF97; --warn:#F1B05A; --bad:#FF7070; --ok-soft:#173326; --warn-soft:#3A2A12; --bad-soft:#3D1C1F; color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:15px;line-height:1.5}
+.wrap{max-width:1360px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:22px 48px;display:flex;flex-direction:column;gap:18px}
+h1,h2,h3{font-family:var(--font-display);font-weight:600;margin:0;text-wrap:balance;letter-spacing:.005em}
+h1{font-size:clamp(30px,4vw,42px);line-height:1.05}
+h2{font-size:22px}
+h3{font-size:17px}
+p{margin:0}
+.mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+.lab{font-size:11.5px;letter-spacing:.09em;text-transform:uppercase;font-weight:800;color:var(--muted)}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* Başlık */
+.top{display:flex;flex-wrap:wrap;gap:12px 28px;align-items:flex-end;justify-content:space-between}
+.top .sub{color:var(--muted);max-width:62ch;margin-top:6px}
+.opts{display:flex;flex-direction:column;gap:6px;min-width:0}
+.seg{display:flex;flex-wrap:wrap;gap:6px}
+.seg button{border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:7px 14px;min-height:40px;cursor:pointer;font-weight:600;font-size:14px}
+.seg button[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.opt-desc{font-size:13px;color:var(--muted)}
+
+/* Ana düzen */
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:18px;align-items:start}
+@media (max-width:1020px){.grid{grid-template-columns:minmax(0,1fr)}}
+.col{display:flex;flex-direction:column;gap:18px;min-width:0}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px;min-width:0}
+
+/* Tezgâh (3B sahne) */
+.bench{position:relative;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:var(--stage);aspect-ratio:16/10;max-width:100%;min-height:300px}
+@media (max-width:600px){.bench{aspect-ratio:4/5}.hud .now{max-width:100%}.hud .alert{display:none}}
+.bench canvas{display:block;width:100%;height:100%;touch-action:none}
+.hud{position:absolute;left:12px;top:12px;right:12px;display:flex;justify-content:space-between;align-items:flex-start;gap:10px;pointer-events:none}
+.hud .now{background:color-mix(in srgb,var(--panel) 88%,transparent);border:1px solid var(--line);border-radius:10px;padding:8px 12px;max-width:70%}
+.hud .now strong{font-family:var(--font-display);font-weight:600;font-size:18px;display:block;line-height:1.2}
+.hud .alert{background:var(--bad);color:#fff;border-radius:10px;padding:8px 12px;font-weight:700;font-size:14px;max-width:46%}
+.hud .alert.warn{background:var(--warn);color:#fff}
+.hud .alert[hidden]{display:none}
+.bench .legend{position:absolute;left:12px;bottom:10px;display:flex;flex-wrap:wrap;gap:6px 12px;font-size:12px;color:var(--muted);background:color-mix(in srgb,var(--panel) 85%,transparent);padding:6px 10px;border-radius:8px;border:1px solid var(--line)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:-1px}
+.bench .tools{position:absolute;right:12px;bottom:10px;display:flex;gap:6px}
+.chipbtn{border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:6px 12px;min-height:36px;cursor:pointer;font-size:13px;font-weight:600}
+.chipbtn[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.loading[hidden]{display:none}
+.loading{position:absolute;inset:0;display:grid;place-items:center;color:var(--muted);font-size:14px;text-align:center;padding:16px}
+
+/* Oynatıcı */
+.player{display:flex;flex-direction:column;gap:10px}
+.transport{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center}
+.play{width:46px;height:46px;border-radius:50%;border:0;background:var(--accent);color:var(--accent-ink);cursor:pointer;display:grid;place-items:center}
+.play svg{width:20px;height:20px}
+.time{font-family:var(--font-mono);font-size:14px;color:var(--muted);font-variant-numeric:tabular-nums}
+.speed{display:flex;gap:4px}
+.speed button{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:4px 9px;min-height:34px;cursor:pointer;font-family:var(--font-mono);font-size:12.5px}
+.speed button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.spacer{flex:1}
+.track-wrap{position:relative;padding-top:2px}
+.track{position:relative;height:34px;border-radius:8px;background:var(--stage);border:1px solid var(--line);overflow:hidden}
+.track .mk{position:absolute;top:4px;bottom:4px;width:12px;margin-left:-6px;border-radius:4px;border:0;cursor:pointer;padding:0}
+.track .mk.KIRMIZI{background:var(--bad)} .track .mk.SARI{background:var(--warn)}
+.track .ph{position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;background:var(--ink);pointer-events:none}
+.scrub{width:100%;accent-color:var(--accent);margin:4px 0 0}
+.strip-head{display:flex;justify-content:space-between;gap:10px;align-items:baseline;flex-wrap:wrap}
+.strip{width:100%;height:46px;display:block;border-radius:8px;background:var(--stage);border:1px solid var(--line)}
+
+/* Senaryo listesi */
+.list{display:flex;flex-direction:column;gap:4px;max-height:430px;overflow:auto;margin:8px -6px 0;padding:0 6px}
+.group{margin-top:10px}
+.sc{display:grid;grid-template-columns:12px minmax(0,1fr) auto;gap:10px;align-items:center;text-align:left;border:1px solid transparent;background:none;border-radius:10px;padding:8px 10px;cursor:pointer;min-height:44px}
+.sc:hover{background:var(--stage)}
+.sc[aria-current="true"]{background:var(--accent-soft);border-color:var(--accent)}
+.sc .nm{display:block;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sc .ds{display:block;font-size:12.5px;color:var(--muted)}
+.dot{width:12px;height:12px;border-radius:50%;background:var(--ok)}
+.dot.SARI{background:var(--warn)} .dot.KIRMIZI{background:var(--bad)}
+
+/* Göstergeler */
+.gauges{display:flex;flex-direction:column;gap:12px}
+.g{display:flex;flex-direction:column;gap:4px}
+.g .row{display:flex;justify-content:space-between;gap:8px;font-size:13.5px}
+.g .val{font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-weight:600}
+.bar{position:relative;height:10px;border-radius:999px;background:var(--stage);border:1px solid var(--line);overflow:hidden}
+.bar i{position:absolute;left:0;top:0;bottom:0;width:0;border-radius:999px;background:var(--ok)}
+.bar i.SARI{background:var(--warn)} .bar i.KIRMIZI{background:var(--bad)}
+.bar b{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--ink);opacity:.7}
+.servos{display:grid;grid-template-columns:auto minmax(0,1fr) 44px;gap:6px 10px;align-items:center;font-size:13px}
+.servos .val{text-align:right}
+.mini{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.mini div{background:var(--stage);border-radius:10px;padding:8px 10px}
+.mini .val{display:block;font-size:17px}
+.mini .lbl{font-size:12px;color:var(--muted)}
+
+/* Ekran bütçesi */
+.screen{display:grid;grid-template-columns:minmax(0,160px) minmax(0,1fr);gap:14px;align-items:start}
+@media (max-width:460px){.screen{grid-template-columns:minmax(0,1fr)}}
+.screen canvas{width:100%;max-width:100%;height:auto;aspect-ratio:4/3;border-radius:8px;border:1px solid var(--line);background:#000;image-rendering:pixelated}
+.cmp{display:flex;flex-direction:column;gap:10px;min-width:0}
+.cmp .way{display:flex;flex-direction:column;gap:4px}
+.way .head{display:flex;justify-content:space-between;gap:8px;font-size:13.5px;flex-wrap:wrap}
+.pill{font-size:12px;font-weight:700;border-radius:999px;padding:2px 9px}
+.pill.ok{background:var(--ok-soft);color:var(--ok)} .pill.SARI{background:var(--warn-soft);color:var(--warn)} .pill.KIRMIZI{background:var(--bad-soft);color:var(--bad)}
+
+/* Bulgular */
+.findings{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.card{border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);padding:14px 16px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.card.on{border-color:var(--ink);box-shadow:0 0 0 2px var(--accent-soft)}
+.card .hd{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.card .what{font-family:var(--font-mono);font-size:13px;color:var(--muted)}
+.card dl{margin:0;display:flex;flex-direction:column;gap:6px}
+.card dt{font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;font-weight:800;color:var(--muted)}
+.card dd{margin:0}
+.card .go{align-self:flex-start;border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:6px 12px;min-height:36px;cursor:pointer;font-weight:600;font-size:13.5px}
+.card .go:hover{border-color:var(--accent)}
+.empty{border:1px dashed var(--line);border-radius:var(--radius);padding:18px;color:var(--muted);text-align:center}
+
+/* Karşılaştırma tablosu */
+.tbl-wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:620px}
+th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:800}
+td.n{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+tr.cur td{background:var(--accent-soft)}
+details{border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);padding:12px 16px}
+summary{cursor:pointer;font-weight:700}
+details ul{margin:10px 0 0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
+.foot{font-size:12.5px;color:var(--muted)}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Kedi Deneme Tezgâhı</h1>
+      <p class="sub">Kutu Kafalı Kedi'nin dijital ikizi. Gerçek ölçüler, ağırlıklar ve motor sınırlarıyla Tuğra'nın kliplerini oynatır; parçaları basmadan önce nerede sorun çıkacağını gösterir.</p>
+    </div>
+    <div class="opts">
+      <span class="lab" id="opt-lab">Ya şöyle olsaydı?</span>
+      <div class="seg" id="opts" role="group" aria-labelledby="opt-lab"></div>
+      <span class="opt-desc" id="opt-desc"></span>
+    </div>
+  </header>
+
+  <div class="grid">
+    <div class="col">
+      <div class="bench" id="bench">
+        <canvas id="three" aria-label="Kedinin 3B modeli; fareyle çevir, tekerlekle yakınlaş"></canvas>
+        <div class="loading" id="loading">3B model yükleniyor…</div>
+        <div class="hud">
+          <div class="now"><span class="lab" id="hud-kind">Klip</span><strong id="hud-name">…</strong><span class="small muted" id="hud-sub"></span></div>
+          <div class="alert" id="hud-alert" hidden></div>
+        </div>
+        <div class="legend" aria-hidden="true">
+          <span><i style="background:var(--ok)"></i>motor rahat</span>
+          <span><i style="background:var(--warn)"></i>zorlanıyor</span>
+          <span><i style="background:var(--bad)"></i>tam güçte / sorunlu parça</span>
+        </div>
+        <div class="tools">
+          <button type="button" class="chipbtn" id="ghost" aria-pressed="true" title="Klibin istediği pozu yarı saydam göster">Hayalet hedef</button>
+        </div>
+      </div>
+
+      <section class="panel player" aria-label="Oynatıcı">
+        <div class="transport">
+          <button type="button" class="play" id="play" aria-label="Duraklat"></button>
+          <span class="time" id="time">0,00 / 0,00 sn</span>
+          <div class="speed" role="group" aria-label="Hız">
+            <button type="button" data-s="0.25" aria-pressed="false">¼×</button>
+            <button type="button" data-s="0.5" aria-pressed="false">½×</button>
+            <button type="button" data-s="1" aria-pressed="true">1×</button>
+          </div>
+          <span class="spacer"></span>
+          <label class="small" style="display:flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" id="loop" checked> Bitince baştan</label>
+        </div>
+        <div class="track-wrap">
+          <div class="track" id="track" aria-label="Sorunlu anlar"></div>
+          <input type="range" class="scrub" id="scrub" min="0" max="1000" step="1" value="0" aria-label="Zaman">
+        </div>
+        <div class="strip-head">
+          <span class="lab">Yüz ekranının iş yükü (her kare)</span>
+          <span class="small muted">çizgi = 40 ms (saniyede 25 kare sınırı)</span>
+        </div>
+        <canvas class="strip" id="strip" height="46" aria-label="Her karede ekrana gönderilmesi gereken süre"></canvas>
+      </section>
+
+      <section aria-labelledby="f-title" style="display:flex;flex-direction:column;gap:12px">
+        <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:baseline">
+          <h2 id="f-title">Bu senaryoda bulunanlar</h2>
+          <span class="small muted" id="f-count"></span>
+        </div>
+        <div class="findings" id="findings"></div>
+      </section>
+    </div>
+
+    <aside class="col">
+      <section class="panel" aria-labelledby="sc-title">
+        <h2 id="sc-title">Senaryolar</h2>
+        <p class="small muted">Noktanın rengi: seçili tasarımda o senaryonun durumu.</p>
+        <div class="list" id="list"></div>
+      </section>
+
+      <section class="panel" aria-labelledby="g-title">
+        <h2 id="g-title" style="margin-bottom:12px">Bu anda</h2>
+        <div class="gauges">
+          <div class="g">
+            <div class="row"><span>Toplam akım</span><span class="val" id="g-akim">0,0 A</span></div>
+            <div class="bar"><i id="g-akim-bar"></i><b id="g-akim-lim"></b></div>
+            <span class="small muted" id="g-akim-note">Adaptör sınırı 5 A (siyah çizgi)</span>
+          </div>
+          <div class="g">
+            <div class="row"><span>Motorların yükü</span><span class="small muted">durma torkunun yüzdesi</span></div>
+            <div class="servos" id="servos"></div>
+          </div>
+          <div class="mini">
+            <div><span class="val mono" id="g-bosluk">–</span><span class="lbl" id="g-bosluk-l">en dar boşluk</span></div>
+            <div><span class="val mono" id="g-donme">–</span><span class="lbl">taban döndü</span></div>
+            <div><span class="val mono" id="g-egim">–</span><span class="lbl">taban kalktı</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="e-title">
+        <h2 id="e-title">Yüz ekranı bütçesi</h2>
+        <p class="small muted" style="margin:4px 0 12px">ESP32 bu kareyi ekrana yetiştirebilir mi? Kırmızı kutu, bir önceki kareden bu yana değişen bölge.</p>
+        <div class="screen">
+          <canvas id="scr" width="320" height="240" aria-label="Robotun ekranında görünen yüz"></canvas>
+          <div class="cmp">
+            <div class="way">
+              <div class="head"><span><b>Tüm ekranı çiz</b> <span class="muted small">(şu anki yöntem)</span></span><span class="pill" id="w1-pill"></span></div>
+              <span class="small mono" id="w1-txt"></span>
+            </div>
+            <div class="way">
+              <div class="head"><span><b>Sadece değişeni çiz</b> <span class="muted small">(öneri)</span></span><span class="pill" id="w2-pill"></span></div>
+              <span class="small mono" id="w2-txt"></span>
+              <div class="bar"><i id="w2-bar"></i><b style="left:100%"></b></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </aside>
+  </div>
+
+  <section class="panel" aria-labelledby="c-title">
+    <h2 id="c-title">Seçenekleri yan yana koy</h2>
+    <p class="small muted" style="margin:4px 0 10px">Bütün senaryolar her seçenekte ayrı ayrı oynatıldı. Bir satıra basınca o seçeneğe geçersin.</p>
+    <div class="tbl-wrap"><table id="cmp"></table></div>
+  </section>
+
+  <details>
+    <summary>Bu sayfa nasıl çalışıyor, neye güvenebilirim?</summary>
+    <ul>
+      <li>Fiziği bilgisayarda MuJoCo hesapladı (<span class="mono">python -m sim.disa_aktar</span>). Bu sayfa o kaydı oynatır; kedinin her açısı, tabanın kayması ve motor yükleri hesaptan gelir, elle çizilmedi.</li>
+      <li>Ölçüler Teknik Resim v0.2'den, ağırlıklar İç Mimari v0.3'ten, motor bilgileri satıcı değerlerinden. Kafa derinliği (60 mm) çizimde olmadığı için tahmin.</li>
+      <li>Sonuçlar "kesin böyle olur" değil, "montajda ilk buna bak" demektir. Parçalar tartılınca <span class="mono">sim/parcalar.py</span> düzeltilir ve sayfa yeniden üretilir.</li>
+      <li>Ekran bütçesi, ESP32'nin ekrana 40 MHz SPI ile 16 bit renk (RGB565) gönderdiği varsayımıyla hesaplanır. Wokwi gerçek ekrandan yavaştır; gerçek kartta bu sayılar geçerlidir.</li>
+      <li>Henüz yok: kabloların burulması, kulak ipinin gerilmesi, parçaların kabuğun içine sığması.</li>
+    </ul>
+  </details>
+  <p class="foot" id="foot"></p>
+</div>
+<script type="application/json" id="veri">__VERI__</script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/geometries/RoundedBoxGeometry.js"></script>
+<script>
+(() => {
+"use strict";
+const D = JSON.parse(document.getElementById("veri").textContent);
+const $ = id => document.getElementById(id);
+const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+const fmt = (v,n=1) => Number(v).toFixed(n).replace(".", ",");
+const KARE = D.kare_ms/1000;
+const FI = {}; D.kare_alanlari.forEach((k,i)=>FI[k]=i);
+const SERVO = [["S0","Gövde dönüşü"],["S1","Baş sağ-sol"],["S2","Baş eğme"],["S3","Sol kulak"],["S4","Sağ kulak"]];
+const PARCA_AD = {kafa:"kafa", ekran:"ekran", kulak_sol:"sol kulak", kulak_sag:"sağ kulak", govde:"gövde", taban:"taban"};
+const RAM_BLOK_KB = 110;        // Eda'nın ölçtüğü en büyük boş bitişik blok
+const SPI_HZ = 40e6;            // ESP32 -> ILI9341 SPI hızı
+const KARE_BUTCE_MS = 40;       // saniyede 25 kare
+const TAM_EKRAN_B = 320*240*2;  // RGB565
+
+// Sade dilde açıklamalar: neden önemli, ne yapabiliriz
+const ACIKLAMA = {
+  "Çok yakın geçiş": ["3D baskıda ölçüler yarım milimetre kadar şaşar, servo dişlilerinde de biraz boşluk olur. 3 mm'den dar geçişlerde parçalar gerçekte birbirine sürtebilir.",
+    "Kafanın arka alt kenarını eğik kesmek (pah), boynu 3–5 mm uzatmak ya da baş eğme sınırını yazılımda 40°'ye indirmek."],
+  "Çarpışma": ["Parçalar iç içe giriyor. Gerçek robotta motor takılır, kabuk çizilir ya da kırılır.",
+    "Çarpışan parçanın şeklini değiştirmek ya da o hareketin sınırını yazılımda daraltmak."],
+  "Masada dönüyor": ["Gövde hızla dönerken motor tabanı ters yöne iter; döner sandalyede hızlıca dönünce ayaklarının kayması gibi. Robot zamanla kullanıcıya dönük durmaz.",
+    "Tabanın altına lastik ayak, tabana ağırlık ya da klipteki gövde dönüşünü 'Ani' yerine 'Akıcı' yapmak."],
+  "Masada kayıyor": ["Hızlı harekette robot masada yer değiştiriyor. Uzun kullanımda masanın kenarına kadar gidebilir.",
+    "Lastik ayak ya da tabana ağırlık eklemek."],
+  "Devrilme eğilimi": ["Tabanın bir kenarı masadan kalkıyor. 3 dereceyi geçerse robot devrilmeye gider.",
+    "Tabana ağırlık (somun, çelik pul) eklemek; bütün motorları aynı anda ani sürmemek."],
+  "Motor yetişemiyor": ["Klip, motordan yapabileceğinden hızlı dönmesini istiyor (MG90S en fazla 60° / 0,1 sn, MG996R 60° / 0,17 sn). Robot animasyonun gerisinde kalır; atölyede görülen hareketle gerçeği farklı olur.",
+    "O geçişin süresini uzatmak ya da farkı bilerek kabul etmek. 'Hayalet hedef' açıkken farkı gözünle görürsün."],
+  "Motor takılıyor": ["Motor uzun süre tam güçte kalıyor: ısınır, vızıldar, dişlisi aşınır.",
+    "Hareketi yumuşatmak, yükü azaltmak ya da daha güçlü motor seçmek."],
+  "Adaptör sınırda": ["Motorlar aynı anda çok akım çekince voltaj düşer; ESP32 kendini yeniden başlatabilir, ekran titreyebilir.",
+    "Güç klemensine 1000 µF kondansatör, motorları aynı anda değil sırayla başlatmak ya da daha güçlü adaptör."],
+};
+ACIKLAMA["Adaptör yetmiyor"] = ACIKLAMA["Adaptör sınırda"];
+
+/* ---------- yüz çizimi (Yüz Atölyesi ile aynı kod) ---------- */
+const YUZ_VARSAYILAN = {
+  eye_shape:"round", eye_open:0.9, eye_size:1, pupil:0.9, sparkle:0.8, look_x:0, look_y:0,
+  brow_show:true, brow_left:0, brow_right:0, brow_height:0,
+  mouth:"w", mouth_open:0.4, mouth_width:1, mouth_x:0, mouth_tilt:0, tears:0, blush:true, sweat:false, gloom:0, rage:0, anger_mark:false,
+  line:"#2B2A33", iris:"#6B4A3A", blush_color:"#F09AA6", tear_color:"#5DADE2", face_bg:"#FBF8F3", head:"#8E929C"
+};
+  function rr(ctx,x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+  function circle(ctx,x,y,r){ ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); }
+  function teardrop(ctx,x,y,s,fill,stroke){
+    ctx.beginPath(); ctx.moveTo(x,y-s*1.5);
+    ctx.quadraticCurveTo(x+s*1.1,y-s*0.1,x,y+s); ctx.quadraticCurveTo(x-s*1.1,y-s*0.1,x,y-s*1.5); ctx.closePath();
+    ctx.fillStyle=fill; ctx.fill(); ctx.lineWidth=1.5; ctx.strokeStyle=stroke; ctx.stroke();
+  }
+  function iris(ctx,ix,iy,ir,p){
+    circle(ctx,ix,iy,ir); ctx.fillStyle=p.iris; ctx.fill(); ctx.lineWidth=2; ctx.strokeStyle=p.line; ctx.stroke();
+    circle(ctx,ix,iy+ir*0.05,ir*0.46); ctx.fillStyle=p.line; ctx.fill();
+    if (p.sparkle>0){ ctx.globalAlpha=p.sparkle; ctx.fillStyle="#FFFFFF";
+      circle(ctx,ix-ir*0.36,iy-ir*0.38,ir*0.3); ctx.fill(); circle(ctx,ix+ir*0.32,iy+ir*0.3,ir*0.13); ctx.fill(); ctx.globalAlpha=1; }
+  }
+  function eye(ctx,cx,cy,p,o){
+    const R=32*p.eye_size, open=clamp(p.eye_open*o.blink*(p._eyeDip ?? 1),0,1);
+    const lx=clamp(p.look_x+o.look[0],-1,1), ly=clamp(p.look_y+o.look[1],-1,1);
+    ctx.lineCap="round"; ctx.lineJoin="round"; ctx.strokeStyle=p.line;
+    // Huzurlu kapalı göz: aşağı kıvrık kapak, dış köşede kirpikler
+    if (p.eye_shape==="closed"){
+      ctx.beginPath(); ctx.moveTo(cx-R*0.9,cy-R*0.05); ctx.quadraticCurveTo(cx,cy+R*0.55,cx+R*0.9,cy-R*0.05); ctx.lineWidth=5; ctx.stroke();
+      const out = cx<160 ? -1 : 1; ctx.lineWidth=3;
+      for (let i=0;i<3;i++){ const bx=cx+out*R*(0.5+i*0.17), by=cy+R*(0.2-i*0.1); ctx.beginPath(); ctx.moveTo(bx,by); ctx.lineTo(bx+out*R*0.2,by+R*0.24); ctx.stroke(); }
+      return;
+    }
+    // Spiral göz: başı dönmüş; canlı önizlemede yavaşça döner
+    if (p.eye_shape==="spiral"){
+      const turns=3, rmax=R*0.9, full=turns*Math.PI*2;
+      ctx.save(); ctx.translate(cx,cy); ctx.rotate((o.t||0)/260*(cx<160?1:-1)); ctx.beginPath();
+      for (let a=0;a<=full;a+=0.12){ const r=rmax*a/full; a===0 ? ctx.moveTo(0,0) : ctx.lineTo(Math.cos(a)*r,Math.sin(a)*r); }
+      ctx.lineWidth=4.5; ctx.stroke(); ctx.restore(); return;
+    }
+    if (p.eye_shape==="arc"){
+      ctx.beginPath(); ctx.moveTo(cx-R*0.85,cy+R*0.25); ctx.quadraticCurveTo(cx,cy-R*0.8,cx+R*0.85,cy+R*0.25);
+      ctx.lineWidth=5.5; ctx.stroke(); return;
+    }
+    if (open<0.14){
+      ctx.beginPath(); ctx.moveTo(cx-R*0.95,cy); ctx.quadraticCurveTo(cx,cy+R*0.28,cx+R*0.95,cy);
+      ctx.lineWidth=5; ctx.stroke(); return;
+    }
+    // Boş bakış: göz bebeği yok, şoktan bembeyaz
+    if (p.eye_shape==="blank"){
+      ctx.beginPath(); ctx.ellipse(cx,cy,R*0.85,R*0.9*open,0,0,Math.PI*2); ctx.fillStyle="#FFFFFF"; ctx.fill(); ctx.lineWidth=3; ctx.stroke(); return;
+    }
+    if (p.eye_shape==="narrow"){
+      const rx=R*1.05, ry=R*0.8*open, lid=cy-ry*0.15;
+      ctx.save(); ctx.beginPath(); ctx.ellipse(cx,cy,rx,ry,0,0,Math.PI*2); ctx.clip();
+      ctx.beginPath(); ctx.rect(cx-rx-2,lid,rx*2+4,ry*2+4); ctx.clip();
+      ctx.fillStyle="#FFFFFF"; ctx.fillRect(cx-rx-2,cy-ry-2,rx*2+4,ry*2+4);
+      iris(ctx,cx+lx*R*0.35,cy+ry*0.2+ly*R*0.15,R*0.6*p.pupil,p);
+      ctx.restore();
+      const a=Math.asin(clamp((lid-cy)/ry,-1,1)), half=rx*Math.cos(a);
+      ctx.beginPath(); ctx.ellipse(cx,cy,rx,ry,0,a,Math.PI-a); ctx.lineWidth=2.5; ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx-half-5,lid); ctx.lineTo(cx+half+5,lid); ctx.lineWidth=5.5; ctx.stroke();
+      return;
+    }
+    const rx=R*0.95, ry=R*1.08*open;
+    ctx.save(); ctx.beginPath(); ctx.ellipse(cx,cy,rx,ry,0,0,Math.PI*2); ctx.fillStyle="#FFFFFF"; ctx.fill(); ctx.clip();
+    iris(ctx,cx+lx*R*0.38,cy+ly*R*0.3,R*0.68*p.pupil,p);
+    if (p.tears>0.25){ ctx.globalAlpha=0.3+0.3*p.tears; ctx.fillStyle=p.tear_color;
+      ctx.beginPath(); ctx.ellipse(cx,cy+ry*0.95,rx*1.1,ry*(0.15+0.3*p.tears),0,0,Math.PI*2); ctx.fill(); ctx.globalAlpha=1; }
+    ctx.restore();
+    ctx.beginPath(); ctx.ellipse(cx,cy,rx,ry,0,0,Math.PI*2); ctx.lineWidth=2.5; ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(cx,cy,rx,ry,0,Math.PI*1.1,Math.PI*1.9); ctx.lineWidth=5.5; ctx.stroke();
+  }
+  function brow(ctx,cx,by,deg,side,p){
+    ctx.save(); ctx.translate(cx,by); ctx.rotate(deg*Math.PI/180*(side==="L"?-1:1));
+    ctx.beginPath(); ctx.moveTo(-24,3); ctx.quadraticCurveTo(0,-5,24,3);
+    ctx.strokeStyle=p.line; ctx.lineWidth=5; ctx.lineCap="round"; ctx.stroke(); ctx.restore();
+  }
+  function mouth(ctx,p){
+    const m=p.mouth_open; ctx.strokeStyle=p.line; ctx.lineWidth=3.5; ctx.lineCap="round"; ctx.lineJoin="round"; ctx.beginPath();
+    switch(p.mouth){
+      case "smile": ctx.moveTo(142,166); ctx.quadraticCurveTo(160,174+14*m,178,166); ctx.stroke(); break;
+      case "w": { const d=6+8*m; ctx.moveTo(140,164); ctx.quadraticCurveTo(150,164+d,160,164); ctx.quadraticCurveTo(170,164+d,180,164); ctx.stroke(); break; }
+      case "o": { const rx=6+5*m, ry=7+9*m; ctx.ellipse(160,172,rx,ry,0,0,Math.PI*2); ctx.fillStyle=p.line; ctx.fill();
+        ctx.beginPath(); ctx.ellipse(160,172+ry*0.45,rx*0.6,ry*0.35,0,0,Math.PI*2); ctx.fillStyle=p.blush_color; ctx.fill(); break; }
+      case "wavy": { const a=2.5+3*m; ctx.moveTo(138,170); for (let i=0;i<4;i++){ ctx.quadraticCurveTo(138+i*11+5.5,170+(i%2?a:-a)*2,138+(i+1)*11,170); } ctx.stroke(); break; }
+      case "y": ctx.moveTo(160,153); ctx.lineTo(160,165); ctx.moveTo(160,165); ctx.lineTo(148-6*m,177+4*m); ctx.moveTo(160,165); ctx.lineTo(172+6*m,177+4*m); ctx.stroke(); break;
+      // Asık surat: gülümsemenin tersi, açıklık arttıkça daha çok aşağı kıvrılır
+      case "frown": ctx.moveTo(143,177); ctx.quadraticCurveTo(160,164-12*m,177,177); ctx.stroke(); break;
+      // Kocaman gülüş: açık "D" ağız, içinde dil
+      case "grin": { const d=(10+16*m)*1.35;
+        ctx.moveTo(140,163); ctx.quadraticCurveTo(160,166,180,163); ctx.bezierCurveTo(180,163+d,140,163+d,140,163); ctx.closePath();
+        ctx.fillStyle=p.line; ctx.fill(); ctx.save(); ctx.clip();
+        ctx.beginPath(); ctx.ellipse(160,163+d*0.78,12,d*0.32,0,0,Math.PI*2); ctx.fillStyle=p.blush_color; ctx.fill(); ctx.restore();
+        ctx.beginPath(); ctx.moveTo(140,163); ctx.quadraticCurveTo(160,166,180,163); ctx.bezierCurveTo(180,163+d,140,163+d,140,163); ctx.closePath(); ctx.stroke(); break; }
+      // Kedi dişi: w ağız + bir sivri diş
+      case "fang": { const d=6+8*m; ctx.moveTo(140,164); ctx.quadraticCurveTo(150,164+d,160,164); ctx.quadraticCurveTo(170,164+d,180,164); ctx.stroke();
+        const fx=166, fy=164+d*0.42; ctx.beginPath(); ctx.moveTo(fx-3.5,fy-1); ctx.lineTo(fx+3.5,fy+0.5); ctx.lineTo(fx+0.8,fy+6+4*m); ctx.closePath();
+        ctx.fillStyle="#FFFFFF"; ctx.fill(); ctx.lineWidth=2; ctx.stroke(); break; }
+      // Dil çıkarma: w ağzın altından dil sarkar, açıklık dilin uzunluğu
+      case "tongue": { const L=5+10*m, d=6+6*m;
+        ctx.moveTo(153,166); ctx.lineTo(153,168+L*0.4); ctx.bezierCurveTo(153,170+L*1.25,167,170+L*1.25,167,168+L*0.4); ctx.lineTo(167,166); ctx.closePath();
+        ctx.fillStyle=p.blush_color; ctx.fill(); ctx.lineWidth=2.5; ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(160,168); ctx.lineTo(160,168+L*0.6); ctx.lineWidth=1.5; ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(140,164); ctx.quadraticCurveTo(150,164+d,160,164); ctx.quadraticCurveTo(170,164+d,180,164); ctx.lineWidth=3.5; ctx.stroke(); break; }
+      // Yan gülüş: tek taraflı, kendini beğenmiş gülümseme
+      case "smirk": { const u=4+8*m; ctx.moveTo(143,169); ctx.quadraticCurveTo(163,174,176,166-u); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(173,163-u); ctx.quadraticCurveTo(178,165-u,180,169-u); ctx.lineWidth=2.5; ctx.stroke(); break; }
+      // Titrek: korku/gerginlik için zikzak çizgi
+      case "zigzag": { const a=2+3.5*m; ctx.moveTo(138,170); for (let i=0;i<6;i++) ctx.lineTo(138+(i+1)*7.33,170+(i%2?-a:a)); ctx.stroke(); break; }
+      // Esneme: uzun, iri açık ağız; altta dil
+      case "yawn": { const rx=9+6*m, ry=10+13*m;
+        ctx.ellipse(160,170+ry*0.35,rx,ry,0,0,Math.PI*2); ctx.fillStyle=p.line; ctx.fill(); ctx.save(); ctx.clip();
+        ctx.beginPath(); ctx.ellipse(160,170+ry*1.05,rx*0.9,ry*0.5,0,0,Math.PI*2); ctx.fillStyle=p.blush_color; ctx.fill(); ctx.restore();
+        ctx.beginPath(); ctx.ellipse(160,170+ry*0.35,rx,ry,0,0,Math.PI*2); ctx.stroke(); break; }
+      // Öpücük / büzük: küçük "3" şekli
+      case "pout": { const s=0.8+0.5*m; ctx.moveTo(157,170-8*s); ctx.quadraticCurveTo(157+11*s,170-6*s,158,170); ctx.quadraticCurveTo(157+11*s,170+6*s,157,170+8*s); ctx.stroke(); break; }
+      // Gergin dişler: sıkılmış dişlerle tedirgin sırıtma
+      case "grimace": { const h=8+8*m; rr(ctx,141,163,38,h,4); ctx.fillStyle="#FFFFFF"; ctx.fill(); ctx.lineWidth=3; ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(142,163+h/2); ctx.lineTo(178,163+h/2); for (const x of [150,160,170]){ ctx.moveTo(x,163); ctx.lineTo(x,163+h); }
+        ctx.lineWidth=1.5; ctx.stroke(); break; }
+      // Sersem: kenarları dalgalı, açık ağız
+      case "wobble": { const h=6+9*m, a=2+1.5*m;
+        ctx.moveTo(140,165); for (let i=0;i<4;i++) ctx.quadraticCurveTo(145+i*10,165+(i%2?a:-a),150+i*10,165);
+        ctx.lineTo(180,165+h); for (let i=3;i>=0;i--) ctx.quadraticCurveTo(145+i*10,165+h+(i%2?-a:a),140+i*10,165+h);
+        ctx.closePath(); ctx.fillStyle=p.blush_color; ctx.fill(); ctx.lineWidth=3; ctx.stroke(); break; }
+      // Bağırma: üstte dişler, içte dil olan açık ağız (dehşet, öfke)
+      case "shout": { const h=10+14*m;
+        const path=()=>{ ctx.beginPath(); ctx.moveTo(140,163); ctx.lineTo(180,163); ctx.quadraticCurveTo(179,163+h,170,163+h); ctx.lineTo(150,163+h); ctx.quadraticCurveTo(141,163+h,140,163); ctx.closePath(); };
+        path(); ctx.fillStyle=p.line; ctx.fill(); ctx.save(); ctx.clip();
+        ctx.beginPath(); ctx.ellipse(160,163+h*1.02,14,h*0.42,0,0,Math.PI*2); ctx.fillStyle=p.blush_color; ctx.fill();
+        ctx.fillStyle="#FFFFFF"; ctx.fillRect(138,161,44,2+h*0.26); ctx.restore();
+        path(); ctx.lineWidth=3; ctx.stroke(); break; }
+      default: ctx.moveTo(146,170); ctx.lineTo(174,170); ctx.stroke();
+    }
+  }
+  // Öfke işareti (💢): dört kıvrık çizgi, canlı önizlemede atar gibi büyüyüp küçülür
+  function angerMark(ctx,x,y,s,a){
+    ctx.save(); ctx.translate(x,y); ctx.scale(s,s); ctx.globalAlpha=a; ctx.strokeStyle="#D7263D"; ctx.lineWidth=4.5; ctx.lineCap="round";
+    for (let i=0;i<4;i++){ ctx.save(); ctx.rotate(i*Math.PI/2); ctx.beginPath(); ctx.moveTo(4,-15); ctx.quadraticCurveTo(4,-4,15,-4); ctx.stroke(); ctx.restore(); }
+    ctx.restore();
+  }
+  // Yüz ekranının içeriği: sol üst köşe (0,0), boyut 320×240
+  function drawFace(ctx,p,o){
+    ctx.fillStyle=p.face_bg; ctx.fillRect(0,0,320,240);
+    if (o.bg && o.bg.complete && o.bg.naturalWidth){
+      const s=Math.max(320/o.bg.naturalWidth,240/o.bg.naturalHeight), w=o.bg.naturalWidth*s, h=o.bg.naturalHeight*s;
+      ctx.globalAlpha=o.bgOpacity; ctx.drawImage(o.bg,(320-w)/2,(240-h)/2,w,h); ctx.globalAlpha=1;
+    } else if (o.pattern){
+      ctx.fillStyle=p.head; ctx.globalAlpha=0.85;
+      ctx.beginPath(); ctx.moveTo(122,0); ctx.lineTo(160,44); ctx.lineTo(198,0); ctx.closePath(); ctx.fill();
+      for (const y of [64,82]){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(24,y+6); ctx.lineTo(0,y+12); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(320,y); ctx.lineTo(296,y+6); ctx.lineTo(320,y+12); ctx.fill(); }
+      ctx.globalAlpha=1;
+    }
+    // Alın gölgesi: mavi = dehşet, kırmızı = öfke (kareler arasında yavaşça koyulaşır)
+    for (const [v,rgb] of [[p.gloom,"120,160,215"],[p.rage,"240,105,115"]]) if (v>0){
+      const g=ctx.createLinearGradient(0,0,0,115); g.addColorStop(0,"rgba("+rgb+","+(0.6*v)+")"); g.addColorStop(1,"rgba("+rgb+",0)"); ctx.fillStyle=g; ctx.fillRect(0,0,320,115); }
+    const aa = p._angerA ?? (p.anger_mark?1:0);
+    if (aa>0) angerMark(ctx,38,32,1+0.08*Math.sin((o.t||0)/120),aa);
+    const ba = p._blushA ?? (p.blush?1:0);
+    if (ba>0){
+      for (const bx of [62,258]){ ctx.globalAlpha=0.45*ba; ctx.fillStyle=p.blush_color; ctx.beginPath(); ctx.ellipse(bx,152,22,10,0,0,Math.PI*2); ctx.fill(); ctx.globalAlpha=ba;
+        ctx.strokeStyle=p.blush_color; ctx.lineWidth=2; for (let i=0;i<4;i++){ const x=bx-14+i*8; ctx.beginPath(); ctx.moveTo(x,158); ctx.lineTo(x+6,146); ctx.stroke(); } }
+      ctx.globalAlpha=1;
+    }
+    eye(ctx,100,112,p,o); eye(ctx,220,112,p,o);
+    const wa = p._browA ?? (p.brow_show?1:0);
+    if (wa>0){ const by=112-32*p.eye_size*1.3-p.brow_height*14; ctx.globalAlpha=wa; brow(ctx,100,by,p.brow_left,"L",p); brow(ctx,220,by,p.brow_right,"R",p); ctx.globalAlpha=1; }
+    ctx.beginPath(); ctx.moveTo(153,144); ctx.lineTo(167,144); ctx.lineTo(160,152); ctx.closePath(); ctx.fillStyle=p.blush_color; ctx.fill(); ctx.lineWidth=2; ctx.strokeStyle=p.line; ctx.stroke();
+    // Ağız konumu: yana kayma, eğim ve genişlik kareler arasında yumuşakça değişir
+    ctx.save(); const sq=p._mouthSq ?? 1; ctx.translate(160+(p.mouth_x||0)*22,168); ctx.rotate((p.mouth_tilt||0)*Math.PI/180); ctx.scale(p.mouth_width ?? 1,sq); ctx.translate(-160,-168); mouth(ctx,p); ctx.restore();
+    if (p.tears>0){ const R=32*p.eye_size, s=4+5*p.tears;
+      for (const cx of [100,220]){ teardrop(ctx,cx-R*0.55,112+R*0.95+8+o.tearPhase,s,p.tear_color,p.line);
+        if (p.tears>0.5) teardrop(ctx,cx+R*0.5,112+R*0.95+22+((o.tearPhase+14)%30),s*0.75,p.tear_color,p.line); } }
+    const sa = p._sweatA ?? (p.sweat?1:0);
+    if (sa>0){ ctx.globalAlpha=0.9*sa; teardrop(ctx,286,40,9,"#E8F4FC",p.tear_color); ctx.globalAlpha=1; }
+  }
+
+// Klibin yüz kaydındaki bir kareyi tam yüz ayarına çevirir.
+function yuzKaresi(sen, i){
+  if (!sen.yuz) return YUZ_VARSAYILAN;
+  const satir = sen.yuz[clamp(i,0,sen.yuz.length-1)], p = {...YUZ_VARSAYILAN};
+  D.yuz_alanlari.forEach((k,j)=>{ p[k]=satir[j]; });
+  p.blush = p._blushA>0.5; p.sweat = p._sweatA>0.5; p.anger_mark = p._angerA>0.5; p.brow_show = p._browA>0.5;
+  return p;
+}
+const yuzSecenek = t => ({blink:1, look:[0,0], t:t*1000, tearPhase:(t*1000/35)%30, pattern:true});
+
+/* ---------- ekran bütçesi: her karede değişen bölge ---------- */
+const ekranOn = {};
+const offCv = document.createElement("canvas"); offCv.width=320; offCv.height=240;
+const offCtx = offCv.getContext("2d",{willReadFrequently:true});
+// Bir senaryonun her karesi için değişen dikdörtgeni bulur (bir kere hesaplanır).
+function ekranHesapla(sen){
+  if (ekranOn[sen.id]) return ekranOn[sen.id];
+  const n = sen.yuz ? sen.yuz.length : 0, out = [];
+  let onceki = null;
+  for (let i=0;i<n;i++){
+    offCtx.setTransform(1,0,0,1,0,0); offCtx.globalAlpha=1;
+    drawFace(offCtx, yuzKaresi(sen,i), yuzSecenek(i*KARE));
+    const px = new Uint32Array(offCtx.getImageData(0,0,320,240).data.buffer);
+    let x0=320,y0=240,x1=-1,y1=-1;
+    if (onceki){
+      for (let y=0;y<240;y++){ const r=y*320; for (let x=0;x<320;x++){ if (px[r+x]!==onceki[r+x]){ if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y; } } }
+    } else { x0=0;y0=0;x1=319;y1=239; }
+    const w = x1<0?0:x1-x0+1, h = y1<0?0:y1-y0+1, b = w*h*2;
+    out.push({x:x0,y:y0,w,h,b,ms: b ? b*8/SPI_HZ*1000+0.15 : 0, ilk:i===0});
+    onceki = px;
+  }
+  return (ekranOn[sen.id] = out);
+}
+// Ekranın en kötü karesini (ilk kare hariç) özetler.
+function ekranOzet(sen){
+  const e = ekranHesapla(sen); let en = null;
+  e.forEach((k,i)=>{ if (!k.ilk && (!en || k.b>en.b)) en = {...k, i}; });
+  return en;
+}
+
+/* ---------- durum ---------- */
+const S = { sec: "bugun", sen: null, t: 0, oynuyor: true, hiz: 1, hayalet: true };
+const senById = {}; D.senaryolar.forEach(s=>senById[s.id]=s);
+const kayit = () => D.sonuclar[S.sec][S.sen.id];
+const sure = () => { const k = kayit().kareler; return k[k.length-1][0]; };
+const tema = () => { const cs = getComputedStyle(document.documentElement), g = n => cs.getPropertyValue(n).trim();
+  return {stage:g("--stage"), line:g("--line"), ink:g("--ink"), muted:g("--muted"), ok:g("--ok"), warn:g("--warn"), bad:g("--bad"), accent:g("--accent"), panel:g("--panel")}; };
+let T = tema();
+
+// Bir anın kaydını, iki kare arasını doldurarak verir.
+function anKaydi(t){
+  const k = kayit().kareler, n = k.length;
+  const i = clamp(Math.floor(t/KARE),0,n-1), j = Math.min(i+1,n-1), f = clamp((t-k[i][0])/KARE,0,1);
+  const a = k[i], b = k[j], m = a.slice();
+  for (let x=1; x<a.length-1; x++) if (typeof a[x]==="number") m[x] = a[x]+(b[x]-a[x])*f;
+  return {r:m, i};
+}
+const al = (r,ad) => r[FI[ad]];
+const seviyeYuk = v => v>=0.98 ? "KIRMIZI" : v>=0.6 ? "SARI" : "ok";
+
+/* ---------- 3B sahne ---------- */
+let sahne=null;
+function sahneKur(){
+  if (!window.THREE || !THREE.OrbitControls || !THREE.RoundedBoxGeometry){ $("loading").textContent="3B kütüphane yüklenemedi. İnternet bağlantını kontrol edip sayfayı yenile."; return; }
+  const O = D.olculer, cv = $("three");
+  const renderer = new THREE.WebGLRenderer({canvas:cv, antialias:true});
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
+  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(32, 16/10, 5, 5000);
+  camera.position.set(250, 175, 330);
+  const ctrl = new THREE.OrbitControls(camera, cv);
+  let kullaniciCevirdi = false; ctrl.addEventListener('start', ()=>{ kullaniciCevirdi = true; });
+  ctrl.target.set(0, 72, 0); ctrl.enableDamping = true; ctrl.minDistance = 160; ctrl.maxDistance = 900; ctrl.maxPolarAngle = Math.PI*0.49; ctrl.update();
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x8a9490, 0.75));
+  const gun = new THREE.DirectionalLight(0xffffff, 0.85);
+  gun.position.set(160, 380, 220); gun.castShadow = true; gun.shadow.mapSize.set(1024,1024);
+  Object.assign(gun.shadow.camera, {left:-220,right:220,top:220,bottom:-220,near:50,far:900}); scene.add(gun);
+  const dolgu = new THREE.DirectionalLight(0xffffff, 0.3); dolgu.position.set(-250,150,-120); scene.add(dolgu);
+  // Masa: gölge yakalayan zemin ve 1 cm'lik ızgara
+  const zemin = new THREE.Mesh(new THREE.PlaneGeometry(1400,1400), new THREE.ShadowMaterial({opacity:0.18}));
+  zemin.rotation.x = -Math.PI/2; zemin.receiveShadow = true; scene.add(zemin);
+  const izgara = new THREE.GridHelper(600, 60); izgara.material.transparent = true; izgara.material.opacity = 0.35; scene.add(izgara);
+
+  // Yüz ekranının dokusu (320×240)
+  const yuzCv = document.createElement("canvas"); yuzCv.width=320; yuzCv.height=240;
+  const yuzCtx = yuzCv.getContext("2d");
+  const yuzDoku = new THREE.CanvasTexture(yuzCv); yuzDoku.encoding = THREE.sRGBEncoding; yuzDoku.anisotropy = 4;
+
+  function malzeme(renk, hayalet){
+    return hayalet ? new THREE.MeshBasicMaterial({color:renk, transparent:true, opacity:0.16, depthWrite:false})
+                   : new THREE.MeshStandardMaterial({color:renk, roughness:0.62, metalness:0.02});
+  }
+  // Kediyi kurar: taban -> gövde -> boyun -> kafa -> kulaklar (simülasyondaki iskeletle aynı)
+  function kediKur(hayalet){
+    const R = {parca:{}, halka:[]};
+    const kabuk = 0x8E929C, koyu = 0x4A4F59;
+    const tz=O.taban_yukseklik, gy=O.govde_yukseklik, by=O.boyun_yukseklik, ky=O.kafa_yukseklik, eks=O.egme_ekseni_yukseklik;
+    const kok = new THREE.Group(); R.kok = kok;
+    const taban = new THREE.Mesh(new THREE.CylinderGeometry(O.taban_cap/2, O.taban_cap/2+1.5, tz, 72), malzeme(koyu, hayalet));
+    kok.add(taban); R.parca.taban = taban;
+    const govdeEk = new THREE.Group(); govdeEk.position.y = tz/2; kok.add(govdeEk); R.govdeEk = govdeEk;
+    const govde = new THREE.Mesh(new THREE.RoundedBoxGeometry(O.govde_genislik, gy, O.govde_derinlik, 4, 7), malzeme(kabuk, hayalet));
+    govde.position.y = gy/2; govdeEk.add(govde); R.parca.govde = govde;
+    if (!hayalet) for (const s of [-1,1]){ // sabit ön patiler (Teknik Resim notu)
+      const pati = new THREE.Mesh(new THREE.RoundedBoxGeometry(17, 10, 16, 3, 4.5), malzeme(kabuk, false));
+      pati.position.set(s*14, 5, O.govde_derinlik/2+3); govdeEk.add(pati); }
+    const boyunEk = new THREE.Group(); boyunEk.position.y = gy; govdeEk.add(boyunEk); R.boyunEk = boyunEk;
+    const boyun = new THREE.Mesh(new THREE.BoxGeometry(O.boyun_genislik, by, O.boyun_derinlik), malzeme(koyu, hayalet));
+    boyun.position.y = by/2; boyunEk.add(boyun); R.parca.boyun = boyun;
+    const kafaEk = new THREE.Group(); kafaEk.position.y = by+eks; boyunEk.add(kafaEk); R.kafaEk = kafaEk;
+    const kafa = new THREE.Mesh(new THREE.RoundedBoxGeometry(O.kafa_genislik, ky, O.kafa_derinlik, 4, 8), malzeme(kabuk, hayalet));
+    kafa.position.set(0, ky/2-eks, 3); kafaEk.add(kafa); R.parca.kafa = kafa;
+    if (!hayalet){
+      const cerceve = new THREE.Mesh(new THREE.RoundedBoxGeometry(56, 43, 1.2, 2, 0.5), malzeme(0x2B2A33, false));
+      cerceve.position.set(0, ky/2-eks, 3+O.kafa_derinlik/2+0.2); kafaEk.add(cerceve);
+      const ekran = new THREE.Mesh(new THREE.PlaneGeometry(50, 37.5), new THREE.MeshBasicMaterial({map:yuzDoku, toneMapped:false}));
+      ekran.position.set(0, ky/2-eks, 3+O.kafa_derinlik/2+0.9); kafaEk.add(ekran); R.parca.ekran = ekran;
+    }
+    // Kulaklar: üçgen plaka, kafanın tepesindeki menteşeden geriye yatar
+    const kulakSekli = (dis) => { const w=O.kulak_genislik, h=O.kulak_yukseklik+6, s=new THREE.Shape();
+      s.moveTo(-w/2,0); s.lineTo(w/2,0); s.lineTo(dis*4,h); s.closePath(); return s; };
+    for (const [ad,yon] of [["kulak_sol",1],["kulak_sag",-1]]){
+      const ek = new THREE.Group(); ek.position.set(yon*O.kulak_aralik, ky-eks, 3); kafaEk.add(ek); R[ad] = ek;
+      const g = new THREE.ExtrudeGeometry(kulakSekli(yon), {depth:O.kulak_kalinlik*0.6, bevelEnabled:true, bevelThickness:1.2, bevelSize:1.2, bevelSegments:2});
+      g.translate(0,0,-O.kulak_kalinlik*0.3);
+      const kulak = new THREE.Mesh(g, malzeme(kabuk, hayalet)); ek.add(kulak); R.parca[ad] = kulak;
+      if (!hayalet){
+        const ic = new THREE.Mesh(new THREE.ShapeGeometry((()=>{ const s=new THREE.Shape(); s.moveTo(-6,3); s.lineTo(6,3); s.lineTo(yon*3,O.kulak_yukseklik-1); s.closePath(); return s; })()),
+          new THREE.MeshStandardMaterial({color:0xF2B6C1, roughness:0.8}));
+        ic.position.z = O.kulak_kalinlik*0.3+1.3; ek.add(ic);
+      }
+    }
+    // Servo halkaları: her motorun yükünü renkle gösterir
+    if (!hayalet){
+      const halka = (r, kalin) => new THREE.Mesh(new THREE.TorusGeometry(r, kalin, 10, 48), new THREE.MeshBasicMaterial({color:0x2E7A4D}));
+      const h0 = halka(36, 2.2); h0.rotation.x = Math.PI/2; h0.position.y = 1; govdeEk.add(h0);
+      const h1 = halka(19, 2); h1.rotation.x = Math.PI/2; h1.position.y = 1.5; boyunEk.add(h1);
+      const h2 = new THREE.Mesh(new THREE.CylinderGeometry(4, 4, O.boyun_genislik+10, 20), new THREE.MeshBasicMaterial({color:0x2E7A4D}));
+      h2.rotation.z = Math.PI/2; kafaEk.add(h2);
+      const h3 = halka(6, 1.6); h3.rotation.y = Math.PI/2; R.kulak_sol.add(h3);
+      const h4 = halka(6, 1.6); h4.rotation.y = Math.PI/2; R.kulak_sag.add(h4);
+      R.halka = [h0,h1,h2,h3,h4];
+      Object.values(R.parca).forEach(m=>{ m.castShadow = true; m.receiveShadow = true; });
+    } else {
+      taban.visible = false;
+    }
+    return R;
+  }
+  const kedi = kediKur(false), hayalet = kediKur(true);
+  scene.add(kedi.kok); scene.add(hayalet.kok);
+
+  function boyutla(){
+    const w = cv.clientWidth, h = cv.clientHeight; if (!w || !h) return;
+    renderer.setSize(w, h, false); camera.aspect = w/h; camera.updateProjectionMatrix();
+    if (!kullaniciCevirdi){ const uz = w/h < 1 ? 1.55 : 1; camera.position.set(250*uz, 175*uz, 330*uz); ctrl.update(); }
+  }
+  new ResizeObserver(boyutla).observe(cv); boyutla();
+  function renkleriUygula(){ scene.background = new THREE.Color(T.stage);
+    izgara.material.color = new THREE.Color(T.line); }
+  renkleriUygula();
+  $("loading").hidden = true;
+  sahne = {renderer, scene, camera, ctrl, kedi, hayalet, yuzCtx, yuzDoku, renkleriUygula, sonYuz:-1};
+}
+const rad = d => d*Math.PI/180;
+// Eklem açılarını (C1 birimi) bir kedi modeline uygular.
+function pozUygula(K, q){
+  const yatma = rad(D.olculer.kulak_yatma_derece);
+  K.govdeEk.rotation.y = -rad(q[0]);
+  K.boyunEk.rotation.y = -rad(q[1]);
+  K.kafaEk.rotation.x = -rad(q[2]);
+  K.kulak_sol.rotation.x = -(1-q[3])*yatma;
+  K.kulak_sag.rotation.x = -(1-q[4])*yatma;
+}
+
+// Şu an etkin olan bulgular (o anın ±0,4 sn çevresi)
+function etkinBulgular(t){ return kayit().bulgular.filter(b => Math.abs(b.t - t) < 0.4); }
+
+// 3B sahneyi bu ana göre günceller.
+function sahneGuncelle(r, etkin){
+  if (!sahne) return;
+  const K = sahne.kedi, H = sahne.hayalet;
+  const q = [0,1,2,3,4].map(i=>r[1+i]), komut = [0,1,2,3,4].map(i=>r[6+i]);
+  pozUygula(K, q); pozUygula(H, komut);
+  // Taban: simülasyonda x ileri, y sola, z yukarı -> sahnede z ileri, x sola, y yukarı
+  const bx=al(r,"taban_x"), byy=al(r,"taban_y"), bz=al(r,"taban_z");
+  const qt = new THREE.Quaternion(al(r,"taban_qy"), al(r,"taban_qz"), al(r,"taban_qx"), al(r,"taban_qw")).normalize();
+  for (const M of [K,H]){ M.kok.position.set(byy, bz, bx); M.kok.quaternion.copy(qt); }
+  H.kok.visible = S.hayalet;
+  // Servo halkaları yük rengini alır
+  K.halka.forEach((h,i)=>{ const s = seviyeYuk(al(r,"yuk_S"+i)); h.material.color.set(s==="KIRMIZI"?T.bad:s==="SARI"?T.warn:T.ok); });
+  // Sorunlu parçalar kırmızı parlar
+  const yak = new Set();
+  const cift = al(r,"bosluk_cift"), mm = al(r,"bosluk_mm");
+  if (mm < 3) cift.split("-").forEach(p=>yak.add(p));
+  etkin.forEach(b=>{ if (b.parca && b.parca.includes("-")) b.parca.split("-").forEach(p=>yak.add(p)); if (b.parca==="taban") yak.add("taban"); });
+  const nabiz = 0.45+0.35*Math.sin(performance.now()/140);
+  for (const [ad,m] of Object.entries(K.parca)){
+    if (!m.material.emissive) continue;
+    if (yak.has(ad)){ m.material.emissive.set(T.bad); m.material.emissiveIntensity = nabiz; }
+    else { m.material.emissive.setRGB(0,0,0); m.material.emissiveIntensity = 0; }
+  }
+}
+
+// Ekrandaki yüzü (3B kafadaki ve yan paneldeki) çizer.
+function yuzCiz(fi, t){
+  const sen = S.sen, p = yuzKaresi(sen, fi), o = yuzSecenek(fi*KARE);
+  if (sahne && sahne.sonYuz !== sen.id+":"+fi){
+    sahne.yuzCtx.setTransform(1,0,0,1,0,0); sahne.yuzCtx.globalAlpha=1; drawFace(sahne.yuzCtx, p, o);
+    sahne.yuzDoku.needsUpdate = true; sahne.sonYuz = sen.id+":"+fi;
+  }
+  const cv = $("scr"), c = cv.getContext("2d");
+  c.setTransform(1,0,0,1,0,0); c.globalAlpha=1; drawFace(c, p, o);
+  const e = ekranHesapla(sen)[fi];
+  // Yan panel: iki yöntemin karşılaştırması
+  const tamKb = TAM_EKRAN_B/1024, tamMs = TAM_EKRAN_B*8/SPI_HZ*1000;
+  $("w1-pill").className = "pill KIRMIZI"; $("w1-pill").textContent = "RAM'e sığmıyor";
+  $("w1-txt").textContent = `${fmt(tamKb,0)} KB tek parça gerekiyor, en büyük boş blok ~${RAM_BLOK_KB} KB · gönderim ${fmt(tamMs,0)} ms`;
+  if (!sen.yuz){ $("w2-pill").className="pill ok"; $("w2-pill").textContent="yüz sabit";
+    $("w2-txt").textContent = "Zorlama testlerinde yüz değişmiyor; ekrana bir şey gönderilmez."; $("w2-bar").style.width="0"; return; }
+  if (e && e.w){
+    c.strokeStyle = "#E5484D"; c.lineWidth = 3; c.setLineDash([6,4]); c.strokeRect(e.x+1.5, e.y+1.5, Math.max(0,e.w-3), Math.max(0,e.h-3)); c.setLineDash([]);
+  }
+  if (!e || e.ilk){ $("w2-pill").className="pill ok"; $("w2-pill").textContent="ilk kare";
+    $("w2-txt").textContent="Klibin ilk karesi tüm ekranı bir kere çizer (şeritler halinde)."; $("w2-bar").style.width="0"; return; }
+  const kb = e.b/1024, sigar = kb <= RAM_BLOK_KB, yetisir = e.ms <= KARE_BUTCE_MS;
+  const sev = sigar && yetisir ? "ok" : "SARI";
+  $("w2-pill").className = "pill "+sev; $("w2-pill").textContent = !e.w ? "değişen yok" : sev==="ok" ? "sığar, yetişir" : !sigar ? "parçalara böl" : "yavaş";
+  $("w2-txt").textContent = !e.w ? "Bu karede yüz değişmedi: 0 ms." : `${e.w}×${e.h} piksel = ${fmt(kb,1)} KB · gönderim ${fmt(e.ms,1)} ms / ${KARE_BUTCE_MS} ms`;
+  const w2 = $("w2-bar"); w2.style.width = clamp(e.ms/KARE_BUTCE_MS*100,0,100)+"%"; w2.className = sev==="ok"?"":"SARI";
+}
+
+// Göstergeleri günceller.
+function gostergeler(r){
+  const akim = al(r,"akim_a"), lim = D.adaptor_a, olcek = lim*1.2;
+  $("g-akim").textContent = fmt(akim,1)+" A";
+  const ab = $("g-akim-bar"); ab.style.width = clamp(akim/olcek*100,0,100)+"%";
+  ab.className = akim>lim ? "KIRMIZI" : akim>0.8*lim ? "SARI" : "";
+  $("g-akim-lim").style.left = (lim/olcek*100)+"%";
+  SERVO.forEach((s,i)=>{ const v = al(r,"yuk_S"+i), el = $("sv"+i), vb = $("svv"+i);
+    el.style.width = clamp(v*100,0,100)+"%"; const sv = seviyeYuk(v); el.className = sv==="ok"?"":sv; vb.textContent = "%"+Math.round(clamp(v,0,1)*100); });
+  const mm = al(r,"bosluk_mm"), cift = al(r,"bosluk_cift").split("-").map(p=>PARCA_AD[p]||p);
+  $("g-bosluk").textContent = fmt(mm,1)+" mm"; $("g-bosluk").style.color = mm<0?"var(--bad)":mm<3?"var(--warn)":"";
+  $("g-bosluk-l").textContent = cift.join(" ↔ ");
+  const k0 = kayit().kareler[0];
+  const qw=al(r,"taban_qw"), qx=al(r,"taban_qx"), qy=al(r,"taban_qy"), qz=al(r,"taban_qz");
+  const yaw = Math.atan2(2*(qw*qz+qx*qy), 1-2*(qy*qy+qz*qz))*180/Math.PI;
+  const zz = 1-2*(qx*qx+qy*qy), egim = Math.acos(clamp(zz,-1,1))*180/Math.PI;
+  $("g-donme").textContent = fmt(Math.abs(yaw),1)+"°"; $("g-donme").style.color = Math.abs(yaw)>10?"var(--bad)":Math.abs(yaw)>2?"var(--warn)":"";
+  $("g-egim").textContent = fmt(egim,1)+"°"; $("g-egim").style.color = egim>3?"var(--bad)":egim>1?"var(--warn)":"";
+}
+
+// Zaman çizgisinin altındaki ekran yükü şeridini çizer.
+function seritCiz(t){
+  const cv = $("strip"), w = cv.clientWidth, dpr = Math.min(window.devicePixelRatio||1,2);
+  if (cv.width !== Math.round(w*dpr)) cv.width = Math.round(w*dpr);
+  if (cv.height !== Math.round(cv.clientHeight*dpr)) cv.height = Math.round(cv.clientHeight*dpr);
+  const H = cv.height, c = cv.getContext("2d"); c.setTransform(1,0,0,1,0,0); c.clearRect(0,0,cv.width,H);
+  const dur = sure(), maxMs = 48, y = ms => H - 6 - (ms/maxMs)*(H-14);
+  const e = S.sen.yuz ? ekranHesapla(S.sen) : [];
+  // 40 ms sınırı
+  c.strokeStyle = T.bad; c.lineWidth = dpr; c.setLineDash([5*dpr,4*dpr]); c.beginPath(); c.moveTo(0,y(40)); c.lineTo(cv.width,y(40)); c.stroke(); c.setLineDash([]);
+  // Tüm ekranı çizme yöntemi (sabit ~31 ms)
+  const tamMs = TAM_EKRAN_B*8/SPI_HZ*1000;
+  c.fillStyle = T.muted; c.globalAlpha = 0.18; c.fillRect(0, y(tamMs), cv.width, H-6-y(tamMs)); c.globalAlpha = 1;
+  c.font = `${11*dpr}px ${getComputedStyle(document.body).fontFamily}`; c.fillStyle = T.muted;
+  c.fillText("tüm ekranı çizmek ≈ "+fmt(tamMs,0)+" ms", 6*dpr, y(tamMs)+13*dpr);
+  // Sadece değişen bölge
+  const bw = Math.max(1, cv.width/Math.max(1,e.length));
+  e.forEach((k,i)=>{ if (k.ilk || !k.ms) return; const x = (i*KARE)/dur*cv.width;
+    c.fillStyle = (k.b/1024>RAM_BLOK_KB || k.ms>KARE_BUTCE_MS) ? T.warn : T.accent; c.fillRect(x, y(k.ms), Math.max(dpr,bw-dpr), H-6-y(k.ms)); });
+  if (!e.length){ c.fillStyle=T.muted; c.fillText("Bu testte yüz değişmiyor.", 6*dpr, H/2); }
+  const px = t/dur*cv.width; c.fillStyle = T.ink; c.fillRect(px-dpr, 0, 2*dpr, H);
+}
+
+/* ---------- arayüz ---------- */
+function secenekleriKur(){
+  const box = $("opts"); box.innerHTML = "";
+  D.secenekler.forEach(o=>{ const b = document.createElement("button"); b.type="button"; b.textContent = o.ad;
+    b.setAttribute("aria-pressed", String(o.id===S.sec)); b.addEventListener("click", ()=>secenekSec(o.id)); box.appendChild(b); });
+  const o = D.secenekler.find(x=>x.id===S.sec);
+  $("opt-desc").textContent = `${o.aciklama} · ${fmt(o.agirlik_g,0)} g`;
+}
+function listeyiKur(){
+  const box = $("list"); box.innerHTML = "";
+  for (const [tur, baslik] of [["klip","Tuğra'nın klipleri"],["zorlama","Zorlama testleri (en kötü durum)"]]){
+    const h = document.createElement("div"); h.className = "lab group"; h.textContent = baslik; box.appendChild(h);
+    D.senaryolar.filter(s=>s.tur===tur).forEach(s=>{
+      const sonuc = D.sonuclar[S.sec][s.id], k = sonuc.kareler, b = document.createElement("button");
+      b.type="button"; b.className="sc"; b.setAttribute("aria-current", String(S.sen && S.sen.id===s.id));
+      const durum = {"YEŞİL":"sorun yok", "SARI":"dikkat", "KIRMIZI":"sorun var"}[sonuc.durum];
+      b.innerHTML = `<span class="dot ${sonuc.durum}" aria-label="${durum}"></span><span style="min-width:0"><span class="nm"></span><span class="ds"></span></span><span class="small mono muted">${fmt(k[k.length-1][0],1)} sn</span>`;
+      b.querySelector(".nm").textContent = s.ad;
+      b.querySelector(".ds").textContent = s.tur==="klip" ? `${s.dosya} · ${s.duygu}` + (sonuc.bulgular.length?` · ${sonuc.bulgular.length} bulgu`:"") : (sonuc.bulgular.length?`${sonuc.bulgular.length} bulgu`:"sorun yok");
+      b.addEventListener("click", ()=>senaryoSec(s.id));
+      box.appendChild(b);
+    });
+  }
+}
+function izKur(){
+  const tr = $("track"); tr.innerHTML = ""; const dur = sure();
+  kayit().bulgular.forEach(b=>{ const m = document.createElement("button"); m.type="button"; m.className = "mk "+b.seviye;
+    m.style.left = clamp(b.t/dur*100,1,99)+"%"; m.title = `${fmt(b.t,2)} sn · ${b.sorun}: ${b.detay}`; m.setAttribute("aria-label", m.title);
+    m.addEventListener("click", ()=>anaGit(b.t)); tr.appendChild(m); });
+  const ph = document.createElement("div"); ph.className="ph"; ph.id="ph"; tr.appendChild(ph);
+}
+function bulgulariKur(){
+  const box = $("findings"); box.innerHTML = "";
+  const bl = kayit().bulgular;
+  bl.forEach((b,i)=>{
+    const [neden, cozum] = ACIKLAMA[b.sorun] || ["",""];
+    const c = document.createElement("article"); c.className="card"; c.dataset.i = i;
+    c.innerHTML = `<div class="hd"><h3></h3><span class="pill ${b.seviye}">${b.seviye==="KIRMIZI"?"sorun":"dikkat"}</span></div>
+      <span class="what"></span><dl><div><dt>Neden önemli</dt><dd class="n"></dd></div><div><dt>Ne yapabiliriz</dt><dd class="c"></dd></div></dl>
+      <button type="button" class="go">${fmt(b.t,2)}. saniyeye git</button>`;
+    c.querySelector("h3").textContent = b.sorun; c.querySelector(".what").textContent = b.detay;
+    c.querySelector(".n").textContent = neden; c.querySelector(".c").textContent = cozum;
+    c.querySelector(".go").addEventListener("click", ()=>{ anaGit(b.t); $("bench").scrollIntoView({behavior: matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth", block:"center"}); });
+    box.appendChild(c);
+  });
+  // Yüz ekranı kartı (sayfa kendisi hesaplar)
+  if (S.sen.yuz){
+    const en = ekranOzet(S.sen), c = document.createElement("article"); c.className="card";
+    const tamKb = TAM_EKRAN_B/1024;
+    const sigar = en && en.b/1024 <= RAM_BLOK_KB;
+    c.innerHTML = `<div class="hd"><h3>Yüz ekranı</h3><span class="pill ${sigar?"ok":"SARI"}">${sigar?"öneriyle çözülür":"şeritlere böl"}</span></div>
+      <span class="what"></span><dl><div><dt>Neden önemli</dt><dd>Tüm ekranı RAM'de bir kerede çizmek ${fmt(tamKb,0)} KB tek parça bellek ister; ESP32'de en büyük boş parça ~${RAM_BLOK_KB} KB. Eda'nın Wokwi'de gördüğü yavaşlık ve titremenin kaynağı bu.</dd></div>
+      <div><dt>Ne yapabiliriz</dt><dd class="c"></dd></div></dl>`;
+    c.querySelector(".what").textContent = en ? `en çok değişen kare: ${en.w}×${en.h} piksel, ${fmt(en.b/1024,1)} KB, ${fmt(en.ms,1)} ms (${fmt(en.i*KARE,2)}. sn)` : "yüz değişmiyor";
+    c.querySelector(".c").textContent = sigar
+      ? "Her karede sadece değişen bölgeyi RAM'de çizip tek hamlede göndermek. Bu klipte en kötü kare bile belleğe sığıyor ve 40 ms'nin içinde kalıyor; titreme de biter."
+      : "Değişen bölge bazı karelerde 110 KB'ı aşıyor (renk ya da arka plan değişince bütün ekran değişir). O karelerde ekranı 4–6 yatay şerit halinde sırayla çizmek yeter.";
+    if (en){ const g = document.createElement("button"); g.type="button"; g.className="go"; g.textContent = `${fmt(en.i*KARE,2)}. saniyeye git`;
+      g.addEventListener("click", ()=>anaGit(en.i*KARE)); c.appendChild(g); }
+    box.appendChild(c);
+  }
+  $("f-count").textContent = bl.length ? `${bl.length} fizik bulgusu${S.sen.yuz?" + yüz ekranı":""}` : (S.sen.yuz ? "fizikte sorun yok · yüz ekranı aşağıda" : "sorun yok");
+  if (!bl.length && !S.sen.yuz){ box.innerHTML = `<div class="empty">Bu senaryoda sorun bulunmadı.</div>`; }
+}
+function tabloKur(){
+  const t = $("cmp");
+  let h = `<thead><tr><th>Seçenek</th><th>Ağırlık</th><th>Sorunlu</th><th>Dikkat</th><th>En yüksek akım</th><th>Taban en çok döndü</th><th>Taban en çok kalktı</th><th>En dar boşluk</th></tr></thead><tbody>`;
+  D.secenekler.forEach(o=>{
+    const r = Object.values(D.sonuclar[o.id]);
+    const say = sv => r.filter(x=>x.durum===sv).length;
+    const mx = f => Math.max(...r.map(x=>x.ozet[f])), mn = f => Math.min(...r.map(x=>x.ozet[f]));
+    const egim = mx("egim");
+    h += `<tr data-id="${o.id}" class="${o.id===S.sec?"cur":""}" style="cursor:pointer" tabindex="0"><td><b>${o.ad}</b><br><span class="small muted">${o.aciklama}</span></td>
+      <td class="n">${fmt(o.agirlik_g,0)} g</td><td class="n">${say("KIRMIZI")}</td><td class="n">${say("SARI")}</td>
+      <td class="n">${fmt(mx("akim_a"),1)} A</td><td class="n">${fmt(mx("donme"),1)}°</td>
+      <td class="n">${egim>45?'<span class="pill KIRMIZI">devrildi</span>':fmt(egim,1)+"°"}</td><td class="n">${fmt(mn("bosluk_mm"),1)} mm</td></tr>`;
+  });
+  t.innerHTML = h+"</tbody>";
+  t.querySelectorAll("tr[data-id]").forEach(tr=>{ const f=()=>secenekSec(tr.dataset.id); tr.addEventListener("click",f); tr.addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" "){e.preventDefault();f();} }); });
+}
+function servolariKur(){
+  $("servos").innerHTML = SERVO.map((s,i)=>`<span><b class="mono">${s[0]}</b> ${s[1]}</span><div class="bar"><i id="sv${i}"></i></div><span class="val mono small" id="svv${i}">%0</span>`).join("");
+}
+
+function secenekSec(id){ S.sec = id; secenekleriKur(); listeyiKur(); izKur(); bulgulariKur(); tabloKur(); S.t = Math.min(S.t, sure()); ciz(); }
+function senaryoSec(id){ S.sen = senById[id]; S.t = 0; listeyiKur(); izKur(); bulgulariKur();
+  $("hud-kind").textContent = S.sen.tur==="klip" ? "Tuğra'nın klibi · "+S.sen.duygu : "Zorlama testi";
+  $("hud-name").textContent = S.sen.ad; $("hud-sub").textContent = S.sen.tur==="klip" ? S.sen.dosya : "kliplerde olmayan en sert hareket";
+  if (sahne) sahne.sonYuz = -1; ciz(); }
+function anaGit(t){ S.t = clamp(t-0.25, 0, sure()); oynat(false); ciz(); }
+const IKON_OYNAT = '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 3.5v13l11-6.5z" fill="currentColor"/></svg>';
+const IKON_DUR = '<svg viewBox="0 0 20 20" aria-hidden="true"><rect x="4" y="3.5" width="4" height="13" rx="1" fill="currentColor"/><rect x="12" y="3.5" width="4" height="13" rx="1" fill="currentColor"/></svg>';
+function oynat(v){ S.oynuyor = v; $("play").innerHTML = v?IKON_DUR:IKON_OYNAT; $("play").setAttribute("aria-label", v?"Duraklat":"Oynat"); }
+
+// Her şeyi bu ana göre çizer.
+function ciz(){
+  const {r, i} = anKaydi(S.t), dur = sure();
+  const etkin = etkinBulgular(S.t);
+  sahneGuncelle(r, etkin);
+  yuzCiz(Math.min(Math.round(S.t/KARE), (S.sen.yuz||[0]).length-1), S.t);
+  gostergeler(r);
+  $("time").textContent = `${fmt(S.t,2)} / ${fmt(dur,2)} sn`;
+  $("scrub").value = Math.round(S.t/dur*1000);
+  const ph = $("ph"); if (ph) ph.style.left = (S.t/dur*100)+"%";
+  seritCiz(S.t);
+  const a = $("hud-alert");
+  if (etkin.length){ const b = etkin.find(x=>x.seviye==="KIRMIZI") || etkin[0]; a.hidden=false; a.className = "alert"+(b.seviye==="SARI"?" warn":""); a.textContent = `${b.sorun}: ${b.detay}`; }
+  else a.hidden = true;
+  document.querySelectorAll("#findings .card[data-i]").forEach(c=>{ const b = kayit().bulgular[+c.dataset.i]; c.classList.toggle("on", Math.abs(b.t-S.t)<0.4); });
+}
+
+let son = performance.now();
+function dongu(now){
+  const dt = Math.min(0.1, (now-son)/1000); son = now;
+  if (S.oynuyor){ S.t += dt*S.hiz; const dur = sure();
+    if (S.t > dur){ if ($("loop").checked) S.t = 0; else { S.t = dur; oynat(false); } } }
+  ciz();
+  if (sahne){ sahne.ctrl.update(); sahne.renderer.render(sahne.scene, sahne.camera); }
+  requestAnimationFrame(dongu);
+}
+
+/* ---------- başlat ---------- */
+$("play").addEventListener("click", ()=>oynat(!S.oynuyor));
+$("scrub").addEventListener("input", e=>{ S.t = e.target.value/1000*sure(); oynat(false); ciz(); });
+document.querySelectorAll(".speed button").forEach(b=>b.addEventListener("click", ()=>{ S.hiz = +b.dataset.s;
+  document.querySelectorAll(".speed button").forEach(x=>x.setAttribute("aria-pressed", String(x===b))); }));
+$("ghost").addEventListener("click", e=>{ S.hayalet = !S.hayalet; e.currentTarget.setAttribute("aria-pressed", String(S.hayalet)); });
+const temaDegisti = () => { T = tema(); if (sahne) sahne.renkleriUygula(); };
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", temaDegisti);
+new MutationObserver(temaDegisti).observe(document.documentElement, {attributes:true, attributeFilter:["data-theme"]});
+
+servolariKur();
+const ilk = D.senaryolar.find(s=>s.tur==="klip" && D.sonuclar.bugun[s.id].bulgular.length) || D.senaryolar[0];
+S.sen = ilk;
+secenekleriKur(); tabloKur();
+try { sahneKur(); } catch(e){ $("loading").textContent = "3B görünüm açılamadı: "+e.message; }
+senaryoSec(ilk.id);
+oynat(!matchMedia("(prefers-reduced-motion: reduce)").matches);
+$("foot").textContent = `Veri üretildi: ${D.uretildi.replace("T"," ").slice(0,16)} UTC · git ${D.git||"-"} · ${D.senaryolar.length} senaryo × ${D.secenekler.length} seçenek`;
+requestAnimationFrame(dongu);
+})();
+</script>
