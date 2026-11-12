@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <ESP32Servo.h>
+#define YANKI 0 // Elle terminalden test ederken 1, Kaan'ın koduyla çalışırken 0
 
 // --- GÜVENLİK VE İLETİŞİM DEĞİŞKENLERİ ---
 unsigned long sonMesajZamani = 0;
@@ -130,21 +131,21 @@ void loop() {
   // 2. Seri porttan mesaj oku (Echo destekli)
   while (Serial.available() > 0) {
     char c = Serial.read();
-    Serial.print(c); // Yazılanı ekrana geri yansıt
+    if (YANKI) Serial.print(c); // Sadece YANKI 1 ise ekrana geri yansıt
 
-        if (c == '\n' || c == '\r') {
+    if (c == '\n' || c == '\r') {
       gelenSatir.trim();
 
       if (gelenSatir.length() > 0) {
-        Serial.println(); // Okunabilirlik için alt satıra geç
+        if (YANKI) Serial.println(); // Sadece YANKI 1 ise okunabilirlik için alt satıra geç
 
         StaticJsonDocument<256> doc;
         DeserializationError error = deserializeJson(doc, gelenSatir);
 
         if (error) {
-          hataGonder(-1, "bad_json");
+          hataGonder(0, "bad_json"); // Sözleşme gereği -1 yerine 0
         } else {
-          int seq = doc["seq"] | -1; 
+          int seq = doc["seq"] | 0;  // Numarasız mesajlar için varsayılan 0
           const char* cmd = doc["cmd"];
 
           if (cmd == nullptr) {
@@ -202,6 +203,12 @@ void loop() {
     }
     else {
       gelenSatir += c;
+
+      // 256 karakteri geçerse sıfırla ve bad_json dön
+      if (gelenSatir.length() > 256) {
+        gelenSatir = "";
+        hataGonder(0, "bad_json");
+      }
     }
   }
 
