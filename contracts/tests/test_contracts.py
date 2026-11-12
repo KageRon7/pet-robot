@@ -174,6 +174,12 @@ def test_ping_command_line():
     assert json.loads(SerialCommand(seq=43, cmd="ping").to_line()) == {"v": 1, "seq": 43, "cmd": "ping"}
 
 
+# anim komutu klip adını taşımalı, deg ve ms yazılmamalı.
+def test_anim_command_line():
+    line = SerialCommand(seq=44, cmd="anim", name="happy").to_line()
+    assert json.loads(line) == {"v": 1, "seq": 44, "cmd": "anim", "name": "happy"}
+
+
 # Hatalı komutlar reddedilmeli.
 @pytest.mark.parametrize(
     "data",
@@ -183,6 +189,10 @@ def test_ping_command_line():
         {"seq": 1, "cmd": "move", "deg": [90, 90, 90, 90, 90]},  # ms yok
         {"seq": 1, "cmd": "ping", "deg": [90, 90, 90, 90, 90]},  # ping'de açı
         {"seq": 1, "cmd": "dance"},  # liste dışı komut
+        {"seq": 1, "cmd": "anim"},  # anim'de klip adı yok
+        {"seq": 1, "cmd": "anim", "name": ""},  # boş klip adı
+        {"seq": 1, "cmd": "anim", "name": "happy", "ms": 300},  # anim'de ms
+        {"seq": 1, "cmd": "ping", "name": "happy"},  # ping'de klip adı
         {"v": 2, "seq": 1, "cmd": "ping"},  # yanlış sürüm
     ],
 )

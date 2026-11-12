@@ -2,6 +2,7 @@
 
 C1 mantıksal pozdur (derece ve 0–1 kulak değerleri, Python içinde kalır).
 C2 ESP32'ye USB seri porttan giden tek satırlık JSON protokolüdür (fiziksel açılar, 0–180).
+C2 "anim" komutu ESP32'ye gömülü bir klibi (yüz + motorlar) adıyla oynatır; ESP32 adı bilmiyorsa bad_cmd döner.
 """
 
 from typing import Annotated, Literal
@@ -43,13 +44,19 @@ class SerialCommand(ContractModel):
 
     v: Literal[1] = PROTOCOL_VERSION
     seq: int = Field(ge=0, description="Artan mesaj numarası")
-    cmd: Literal["move", "ping", "neutral"]
+    cmd: Literal["move", "ping", "neutral", "anim"]
     deg: list[PhysicalAngle] | None = Field(
         default=None, description="S0–S4 fiziksel açıları; sadece move'da"
     )
     ms: int | None = Field(default=None, ge=0, description="Hareket süresi; sadece move'da")
+    name: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=32,
+        description="ESP32'ye gömülü klibin adı (örn. happy); sadece anim'de",
+    )
 
-    # move komutunda 5 açı ve süre zorunlu; ping ve neutral'da bu alanlar olmamalı.
+    # move'da 5 açı ve süre, anim'de klip adı zorunlu; diğer komutlarda bu alanlar olmamalı.
     @model_validator(mode="after")
     def _check_move_fields(self) -> "SerialCommand":
         if self.cmd == "move":
@@ -59,6 +66,11 @@ class SerialCommand(ContractModel):
                 raise ValueError("move komutu ms içermeli")
         elif self.deg is not None or self.ms is not None:
             raise ValueError(f"{self.cmd} komutu deg veya ms içermez")
+        if self.cmd == "anim":
+            if self.name is None:
+                raise ValueError("anim komutu name içermeli")
+        elif self.name is not None:
+            raise ValueError(f"{self.cmd} komutu name içermez")
         return self
 
     # Komutu seri porta yazılacak tek satıra çevirir (boş alanlar atılır, sonuna \n eklenir).
