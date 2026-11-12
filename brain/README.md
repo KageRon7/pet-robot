@@ -17,6 +17,27 @@ Kedinin hangi duyguyu yaşayacağına karar veren kısım. Girdisi Sözleşme B1
 |---|---|
 | `kurallar.py` | Kurallı beyin. `decide(b1)` fonksiyonu B1 alır, `Decision` döner. |
 | `tests/fake_brain.py` | Faz 0 sahte beyni. Girdiye bakmadan rastgele bir duygu seçer. |
+| `claude_beyin.py` | Claude beyni (Ferhat). Bağlamı Claude'a sorar; cevap bozuk, geç ya da hatalıysa kural beynine döner. |
+| `tests/test_claude_beyin.py` | Claude beyninin testleri. Sahte Claude ile çalışır, anahtar gerekmez. |
+
+## Claude beyni
+
+Kedi taklit etmez, tepki verir: masa başında uzun saatler çalışan birine arkadaşlık eden bir evcil hayvan gibi davranır. Model `claude-haiku-5-5` (hızlı ve ucuz). Claude 3,5 saniyede cevap vermezse, liste dışı bir duygu ya da 0-1 dışı bir şiddet döndürürse, internet yoksa kural beyni karar verir. Kararın `reason` alanı hangisinin cevap verdiğini gösterir: `[claude] ...` ya da `[kural, zaman aşımı] ...`.
+
+Açmak için repo kökündeki `.env` dosyasına yaz:
+
+```
+ANTHROPIC_API_KEY=senin-anahtarın
+BEYIN=claude
+```
+
+Anahtarsız denemek için `BEYIN=sahte`. Hiç yazmazsan kural beyni çalışır, ekibin kurulumu değişmez.
+
+```powershell
+python -m brain.claude_beyin            # sahte Claude ile 8 örnek
+python -m brain.claude_beyin --gercek   # gerçek Claude ile 8 örnek
+python -m pytest brain/tests            # testler
+```
 
 
 Repo kökünde, Python 3.11 ile:
@@ -88,5 +109,4 @@ Durumsal kısımlar:
 - Aynı anda birden fazla olay varsa sadece en yenisine bakılır, öncelik sırası yoktur.
 - Kod hata yakalayıp sessizce `idle` döndüğü için, kodda yazım hatası olursa kedi hata göstermeden `idle` kalır. Testte "Hata, bekleme durumu" yazısı görürsen sebebi budur.
 - `tests/fake_brain.py` henüz `Decision` değil düz sözlük döndürür.
-- LLM beyni henüz yok. İlk sürümde API kullanılmıyor, anahtar gerekmiyor.
 - Sahte olay üreteci (`tools/fake_events`) her olayda bağlam kurduğu için "olay yok" durumunu üretmez. O durumu denemek için `kurallar.py`'nin test bloğuna bak.
