@@ -1178,7 +1178,7 @@ void loop()
 
         if (error)
         {
-          hataGonder(-1, "bad_json");
+          hataGonder(0, "bad_json");
         }
         else
         {
