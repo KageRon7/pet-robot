@@ -31,3 +31,6 @@ desktop.ini
 *.mp4
 *.avi
 recordings/
+
+# Yüz verisi (sadece sayılar, görüntü yok): kişisel, şimdilik GitHub'a gönderilmez
+veri/
