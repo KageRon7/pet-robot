@@ -1163,6 +1163,14 @@ void loop()
     else
     {
       gelenSatir += c;
+
+      // Çok uzun (bozuk) mesaj belleği şişirmesin: 256 karakteri geçerse
+      // biriken mesajı at ve bad_json dön (Onur'un kodundaki koruma).
+      if (gelenSatir.length() > 256)
+      {
+        gelenSatir = "";
+        hataGonder(0, "bad_json");
+      }
     }
 
     if (mesajHazir)
