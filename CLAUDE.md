@@ -69,6 +69,6 @@ Not: Yüz ekranı ESP32'de; klipler `firmware/animasyon_aktar.py` ile karta göm
 ## Claude için çalışma notları (token tasarrufu)
 - **`firmware/animasyon_oynatma/include/animasyonlar.h` otomatik üretilir (~4300 satır): kullanıcı açıkça istemedikçe okuma, elle de düzenleme.** Klip değişince `python firmware/animasyon_aktar.py` ile yeniden üretilir.
 - `motion/clips/*.json` dosyalarının hepsini okuma; gerekirse bir tanesine bak, format zaten yukarıda.
-- Kodda bir şey ararken önce `graphify-out/GRAPH_REPORT.md` dosyasına bak (hangi sınıf/fonksiyon nerede, kim kimi çağırıyor), sonra sadece ilgili dosyaları aç. `graphify-out/graph.json` ve `graph.html` büyük dosyalar, okuma; bağlantı sorusu için `graphify explain "SınıfAdı"` veya `graphify path "A" "B"` komutunu kullan.
+- Kodda bir şey ararken, `graphify-out/` klasörü varsa (sadece Ferhat'ın bilgisayarında; git'e girmez) önce `graphify-out/GRAPH_REPORT.md` dosyasına bak (hangi sınıf/fonksiyon nerede, kim kimi çağırıyor), sonra sadece ilgili dosyaları aç. `graphify-out/graph.json` ve `graph.html` büyük dosyalar, okuma; bağlantı sorusu için `graphify explain "SınıfAdı"` veya `graphify path "A" "B"` komutunu kullan.
 - Kod değişikliğinden sonra grafiği tazelemek için: `graphify update .` (token harcamaz).
 - Görev hangi klasördeyse orada kal; ilgisiz modülleri okuma. venv, `.pio/`, `veri/`, `*.task` dosyalarını okuma.
