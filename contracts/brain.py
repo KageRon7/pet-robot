@@ -57,6 +57,11 @@ class Decision(ContractModel):
     duration_s: float = Field(ge=0, description="Duygunun süresi; sonra idle'a dönülür")
     memory_note: str | None = Field(default=None, description="Hafızaya yazılacak not veya null")
     reason: str = Field(default="", description="Sadece log ve debug için")
+    # 13 Kasım (Ferhat onayı): beyin isterse belirli bir klibi adıyla ister (örn. "hapsirma").
+    # Ad = klibin dosya adı (motion/clips/hapsirma.json -> "hapsirma"), bkz. motion.clip_id().
+    # Boşsa eskisi gibi duyguya göre klip seçilir. Bilinmeyen ad gelirse router yok sayar,
+    # loglar ve duyguya göre devam eder; karar bu yüzden asla geçersiz sayılmaz.
+    clip: str | None = Field(default=None, description="İstenen klibin adı (dosya adı) veya null")
 
     # Güvenli varsayılan karar: hiçbir şey anlaşılamadığında kedi sakin durur.
     @classmethod

@@ -15,6 +15,7 @@ from contracts import (
     Pose,
     SerialCommand,
     SerialReply,
+    clip_id,
     ear_to_deg,
 )
 
@@ -135,6 +136,30 @@ def test_decision_valid():
 )
 def test_decision_falls_back_to_idle(raw):
     assert Decision.parse_or_idle(raw).emotion is Emotion.IDLE
+
+
+# B2 "clip" alanı isteğe bağlıdır: yoksa None, varsa olduğu gibi okunur (13 Kasım).
+def test_decision_clip_optional():
+    eski = '{"emotion": "happy", "intensity": 0.8, "duration_s": 4}'
+    assert Decision.parse_or_idle(eski).clip is None
+    yeni = '{"emotion": "playful", "intensity": 0.5, "duration_s": 3, "clip": "hapsirma"}'
+    karar = Decision.parse_or_idle(yeni)
+    assert karar.emotion is Emotion.PLAYFUL and karar.clip == "hapsirma"
+
+
+# Klip kimliği ESP32 aktarıcısıyla aynı kuralla üretilmeli.
+@pytest.mark.parametrize(
+    "ad, beklenen",
+    [
+        ("happy", "happy"),
+        ("happy.json", "happy"),
+        ("Head_Explosion(BuUM)", "head_explosion_buum"),
+        ("Im_so_boored", "im_so_boored"),
+        ("2kafa", "klip_2kafa"),
+    ],
+)
+def test_clip_id(ad, beklenen):
+    assert clip_id(ad) == beklenen
 
 
 # ---------- C1: mantıksal poz ----------
