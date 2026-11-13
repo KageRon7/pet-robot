@@ -17,6 +17,7 @@ from .motion import (
     Pose,
     SerialCommand,
     SerialReply,
+    clip_id,
     ear_to_deg,
 )
 from .perception import MIN_EVENT_CONFIDENCE, FaceTrack, PerceptionEvent
@@ -43,5 +44,6 @@ __all__ = [
     "EAR_UP_DEG",
     "EAR_DOWN_DEG",
     "EAR_NEUTRAL",
+    "clip_id",
     "ear_to_deg",
 ]

@@ -38,13 +38,14 @@ async def sor_ve_oyna(baglam_nesnesi) -> None:
         duygu = ad_al(cevap.emotion)
         sure = float(cevap.duration_s)
         sebep = cevap.reason
+        klip = getattr(cevap, "clip", None)  # beyin belirli bir klip istediyse adı (yoksa None)
     except (AttributeError, TypeError, ValueError) as hata:
         # Saçma cevap: çökme, idle oynat ve devam et.
         print(f"[ROUTER] saçma cevap {cevap!r} ({hata!r}), idle'a dönülüyor")
         await animasyon_oynat("idle", kaynak="hata")
         return
-    print(f"[ROUTER] karar     <- {duygu} ({sebep})")
-    await animasyon_oynat(duygu, kaynak="karar", sure_s=sure)
+    print(f"[ROUTER] karar     <- {duygu}{f' klip={klip}' if klip else ''} ({sebep})")
+    await animasyon_oynat(duygu, kaynak="karar", sure_s=sure, klip=klip)
 
 
 async def mesaji_isle(mesaj, baglam: BaglamTutucu) -> None:
