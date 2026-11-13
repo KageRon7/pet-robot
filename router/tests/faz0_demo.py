@@ -1,7 +1,7 @@
 import asyncio
 import time
 
-from router.animasyon import animasyon_oynat
+from router.animasyon import animasyon_oynat, kapat
 from router.beyin_istemcisi import BaglamTutucu, beyne_sor
 from tools.fake_events import SahteOlayUreteci
 
@@ -90,6 +90,7 @@ async def main(sure_s: float = 15, hiz: float = 20) -> None:
         for g in gorevler:
             g.cancel()
         await asyncio.gather(*gorevler, return_exceptions=True)
+        await kapat()  # ESP32HAL varsa nötr komutu gider
 
 
 if __name__ == "__main__":
@@ -106,5 +107,12 @@ if __name__ == "__main__":
         animasyon.hal_ayarla(hal)
         threading.Thread(target=lambda: asyncio.run(main(sure_s=120, hiz=1)), daemon=True).start()
         kok.mainloop()
+    elif "--esp32" in sys.argv:
+        # Wokwi'deki ESP32'ye bağlanır, gerçek zamanlı.
+        from router import animasyon
+        from router.hal import ESP32HAL
+
+        animasyon.hal_ayarla(ESP32HAL())
+        asyncio.run(main(sure_s=60, hiz=1))
     else:
         asyncio.run(main())
