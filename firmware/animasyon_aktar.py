@@ -1,5 +1,5 @@
-import os
 import json
+import re
 from pathlib import Path
 
 # Proje ana dizinini otomatik bul
@@ -9,24 +9,28 @@ REPO_ROOT = SCRIPT_DIR.parent if SCRIPT_DIR.name == "firmware" else SCRIPT_DIR
 # Hedef C++ başlık dosyası
 HEDEF_H = REPO_ROOT / "firmware" / "animasyon_oynatma" / "include" / "animasyonlar.h"
 
-def animasyon_klasorunu_bul():
-    # Projede içinde C3-taslak formatlı JSON'lar olan klasörü otomatik bulur
-    for root, dirs, files in os.walk(REPO_ROOT):
-        if any(ign in root for ign in [".git", ".pio", ".venv", ".vscode"]):
-            continue
-        json_files = [f for f in files if f.endswith(".json") and f != "diagram.json"]
-        if len(json_files) >= 5:
-            return Path(root)
-    return None
+# Tuğra'nın animasyonlarının durduğu klasör (aramak yerine doğrudan yazıldı, yanlış klasörü bulmasın)
+KAYNAK_KLASOR = REPO_ROOT / "motion" / "clips"
+
+
+# Dosya adını C++'ın kabul ettiği bir ada çevirir: harf, rakam ve _ dışındaki her şey _ olur.
+# Örnek: "Head_Explosion(BuUM)" -> "Head_Explosion_BuUM"
+def guvenli_ad(ad):
+    temiz = re.sub(r"[^A-Za-z0-9_]", "_", ad)
+    temiz = re.sub(r"_+", "_", temiz).strip("_")
+    if not temiz or temiz[0].isdigit():
+        temiz = "klip_" + temiz
+    return temiz
+
 
 def main():
-    kaynak_klasor = animasyon_klasorunu_bul()
-    if not kaynak_klasor:
-        print("HATA: Animasyon JSON klasörü bulunamadı!")
+    kaynak_klasor = KAYNAK_KLASOR
+    if not kaynak_klasor.is_dir():
+        print(f"HATA: Animasyon klasörü bulunamadı: {kaynak_klasor}")
         return
 
-    print(f"Animasyon klasörü bulundu: {kaynak_klasor.relative_to(REPO_ROOT)}")
-    json_dosyalari = sorted(kaynak_klasor.glob("*.json"))
+    # Her bilgisayarda aynı sıra çıksın diye küçük harfe göre sıralanır
+    json_dosyalari = sorted(kaynak_klasor.glob("*.json"), key=lambda d: d.name.lower())
 
     satirlar = [
         "#pragma once",
@@ -47,8 +51,8 @@ def main():
             print(f"UYARI: {dosya.name} bozuk JSON içeriyor, atlandı! ({e})")
             continue
 
-        klip_adi = dosya.stem.lower() # örn: happy.json -> "happy"
-        degisken_adi = f"{dosya.stem.upper().replace('-', '_').replace(' ', '_')}_JSON"
+        klip_adi = guvenli_ad(dosya.stem).lower()  # örn: happy.json -> "happy"
+        degisken_adi = f"{guvenli_ad(dosya.stem).upper()}_JSON"
 
         satirlar.append(f'const char {degisken_adi}[] = R"json({icerik})json";\n')
         klip_listesi.append((klip_adi, degisken_adi))
@@ -61,7 +65,8 @@ def main():
     satirlar.append("};\n")
     satirlar.append("const int KLIP_SAYISI = sizeof(klipler) / sizeof(klipler[0]);\n")
 
-    HEDEF_H.write_text("\n".join(satirlar), encoding="utf-8")
+    # Windows satır sonu (CRLF) her bilgisayarda aynı olsun, dosya gereksiz yere değişmesin
+    HEDEF_H.write_text("\n".join(satirlar), encoding="utf-8", newline="\r\n")
     print(f"BAŞARILI: Toplam {len(klip_listesi)} animasyon '{HEDEF_H.name}' dosyasına aktarıldı!")
 
 if __name__ == "__main__":

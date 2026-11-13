@@ -928,7 +928,7 @@ const char HAPPY_JSON[] = R"json({
   ]
 })json";
 
-const char HEAD_EXPLOSION(BUUM)_JSON[] = R"json({
+const char HEAD_EXPLOSION_BUUM_JSON[] = R"json({
   "format": "C3-taslak",
   "name": "Baş Patlaması(BuUM)",
   "emotion": "idle",
@@ -4257,7 +4257,7 @@ const Klip klipler[] = {
     {"curious", CURIOUS_JSON},
     {"curious2", CURIOUS2_JSON},
     {"happy", HAPPY_JSON},
-    {"head_explosion(buum)", HEAD_EXPLOSION(BUUM)_JSON},
+    {"head_explosion_buum", HEAD_EXPLOSION_BUUM_JSON},
     {"idle", IDLE_JSON},
     {"im_so_boored", IM_SO_BOORED_JSON},
     {"playful", PLAYFUL_JSON},
