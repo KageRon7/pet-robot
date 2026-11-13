@@ -6,9 +6,18 @@ from router.beyin_istemcisi import BaglamTutucu, beyne_sor
 from tools.fake_events import SahteOlayUreteci
 
 # REFLEKS TABLOSU: olay -> (animasyon, süre sn). Beyne sormadan hemen oynar.
+# REFLEKS TABLOSU: olay -> (animasyon, süre sn). Beyne sormadan hemen oynar.
+# Önerilen tepkiler contracts/common.py'deki yorumlardan: angry -> startled, surprised -> curious.
 REFLEKS_TABLOSU = {
     "user_arrived": ("idle", 0.0),
+    "user_left": ("sad", 0.0),
     "smile": ("smile", 1.5),
+    "yawn": ("sleepy", 0.0),
+    "drowsy": ("sleepy", 0.0),
+    "looking_at_robot_long": ("playful", 0.0),
+    "sad": ("sad", 0.0),
+    "angry": ("startled", 0.0),
+    "surprised": ("curious", 0.0),
 }
 
 # Arka plandaki beyin görevleri; referansı tutmazsak Python görevi silebilir.
