@@ -22,9 +22,16 @@ BASLANGIC = 1_800_000_000.0  # sanal saatin başlangıcı (gerçek saatle ilgisi
 # Senaryo = (açıklama, toplam_süre_sn, [(saniye, olay), ...])
 SENARYOLAR: dict[str, tuple[str, int, list[tuple[int, str]]]] = {
     "uzuntu": (
-        "Kullanıcı üzgün kalıyor: merak -> oyunbazlık -> birlikte üzülme",
+        "Kullanıcı üzgün kalıyor: merak -> oyun teklifi -> köşesine çekilme",
         120,
         [(5, "sad"), (30, "sad"), (60, "sad"), (90, "sad")],
+    ),
+    "kose": (
+        "Köşedeki kedi: uzun bakışla yeniden meraklanır; bakılmazsa 10 dk sonra kendisi çıkar",
+        1700,
+        [(5, "sad"), (30, "sad"), (60, "sad"),            # köşeye çekilir
+         (200, "looking_at_robot_long"),                  # bakış: yeniden meraklanır
+         (400, "sad"), (430, "sad"), (460, "sad")],       # tekrar köşeye, bu sefer kimse bakmaz
     ),
     "yokluk": (
         "Küçük, orta ve büyük yokluktan sonra karşılama",

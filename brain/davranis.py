@@ -1,7 +1,7 @@
 """Davranış ağacı: kedinin durumunu çağrılar arasında hatırlayan kurallı beyin.
 
 Eski kural tablosu her çağrıda sıfırdan başlıyordu. Bu beyin durumu kendi içinde tutar:
-  - merdiven basamağı: dinlenme -> ilgilenme -> sıkılma -> uyku
+  - merdiven basamağı: dinlenme -> ilgilenme -> sıkılma -> uyku (ve üzüntüde köşeye çekilme)
   - ruh hali (keyifli / üzgün), zamanla sönen
   - alışma (aynı olay tekrarlanınca tepki azalır)
   - üzüntü merdiveni, yokluk süresi, kendiliğinden davranış sayaçları
@@ -34,6 +34,7 @@ DINLENME = "dinlenme"
 ILGILENME = "ilgilenme"
 SIKILMA = "sikilma"
 UYKU = "uyku"
+KOSE = "kose"  # üzüntü merdiveninin sonu: kedi köşesine çekilir
 
 SAAT_GERI_TOLERANSI_S = 5.0  # saat bu kadardan fazla geri giderse durum sıfırlanır
 
@@ -55,6 +56,7 @@ class BeyinDurumu:
     uzuntu_asama_zamani: float | None = None
     uzuntu_son: float | None = None
     sessizlik_bitis: float = 0.0  # bu zamana kadar kendiliğinden eylem yok
+    kose_bitis: float = 0.0  # köşeden çıkış zamanı
     sonraki_ilgi: float | None = None
     sonraki_kendi: float | None = None
     son_olay_karari: Decision | None = None
@@ -106,7 +108,7 @@ def _sondur(d: BeyinDurumu, dt: float, ay: Ayarlar) -> None:
 
 
 def _uzuntu_tepkisi(d: BeyinDurumu, mt: float, ay: Ayarlar) -> tuple[Tepki, str] | None:
-    # Üzgün kullanıcıya merdiven: önce merak, sürerse oyunbazlık, yine sürerse birlikte üzülme.
+    # Üzgün kullanıcıya merdiven: önce merak, sonra oyun teklifi, işe yaramazsa köşesine çekilme.
     if d.uzuntu_son is None or mt - d.uzuntu_son > ay.uzuntu_sifirla_s:
         d.uzuntu_asama = 0
         d.uzuntu_asama_zamani = mt
@@ -117,14 +119,18 @@ def _uzuntu_tepkisi(d: BeyinDurumu, mt: float, ay: Ayarlar) -> tuple[Tepki, str]
         return None  # aynı üzüntü anı, aşama ilerlemez, tekrar tepki de verilmez
     d.uzuntu_asama = min(2, d.uzuntu_asama + 1)
     d.uzuntu_asama_zamani = mt
-    sebepler = ("", "Üzüntü sürüyor: oyunbazlık", "Üzüntü sürüyor: birlikte üzülme")
+    sebepler = ("", "Üzüntü sürüyor: oyun teklifi", "Oyun işe yaramadı: köşesine çekildi")
     return ay.uzuntu[d.uzuntu_asama], sebepler[d.uzuntu_asama]
 
 
 def _tepki_sec(
-    d: BeyinDurumu, ad: str, mt: float, yokluk_s: float | None, ay: Ayarlar
+    d: BeyinDurumu, ad: str, mt: float, yokluk_s: float | None, ay: Ayarlar, koseden: bool = False
 ) -> tuple[Tepki, str] | None:
     # Olay adına göre ilk tepkiyi seçer; tepki verilmeyecekse None.
+    if koseden and ad == "looking_at_robot_long":
+        return ay.uzuntu[0], "Köşesindeydi, kullanıcı ona baktı: yeniden meraklandı"
+    if ad == "user_left":
+        return ay.tepkiler["user_left"], "Kullanıcı kalktı: merakla arkasından bakıyor"
     if ad == "sad":
         return _uzuntu_tepkisi(d, mt, ay)
     if ad == "user_arrived":
@@ -165,8 +171,18 @@ def _olay_isle(
     if not taze:
         return None  # eski olay: tepki yok
 
+    koseden = d.basamak == KOSE
+    if koseden and ad not in ("looking_at_robot_long", "smile", "user_left", "user_arrived"):
+        return None  # köşedeyken sadece bakış, gülümseme, gelme ve gitme onu çıkarır
+
     d.son_yeni_olay = max(d.son_yeni_olay, mt)
-    uyandi = d.basamak == UYKU
+    zorunlu = d.basamak == UYKU or koseden  # uyuyan ya da köşedeki kedi mutlaka tepki verir
+    if koseden:
+        d.basamak = DINLENME
+        d.uzuntu_son = None  # üzüntü merdiveni baştan başlar
+        d.uzuntu_asama = 0
+        if d.kullanici_var:
+            d.sonraki_ilgi = mt + _aralik(rng, ay.ilgi_isteme_aralik_s)
     if d.basamak in (UYKU, SIKILMA):
         d.basamak = DINLENME
         d.sonraki_kendi = mt + _aralik(rng, ay.kendi_eylem_aralik_s)
@@ -183,10 +199,13 @@ def _olay_isle(
     elif ad == "angry":
         d.sessizlik_bitis = mt + ay.geri_cekilme_sessizlik_s
 
-    secim = _tepki_sec(d, ad, mt, yokluk_s, ay)
+    secim = _tepki_sec(d, ad, mt, yokluk_s, ay, koseden)
     if secim is None:
         return None
     tepki, sebep = secim
+    if ad == "sad" and d.uzuntu_asama == 2:
+        d.basamak = KOSE
+        d.kose_bitis = mt + ay.kose_s
 
     carpan = 1.0
     if ad not in ay.alisma_disi:
@@ -194,7 +213,7 @@ def _olay_isle(
         d.alisma[ad] = min(1.0, h + ay.alisma_artis)
         carpan = max(ay.alisma_taban, 1.0 - h)
         p_sessiz = min(ay.sessiz_en_fazla, ay.sessiz_taban_olasilik + ay.sessiz_alisma_katsayisi * h)
-        if not uyandi and rng.random() < p_sessiz:
+        if not zorunlu and rng.random() < p_sessiz:
             log.info("Davranış beyni: '%s' olayına bu sefer tepki verilmedi (alışma %.2f)", ad, h)
             return None
 
@@ -210,6 +229,8 @@ def _olay_isle(
 
 def _zamana_bagli(d: BeyinDurumu, t: float, rng: random.Random, ay: Ayarlar) -> Decision | None:
     # Yeni olay yokken: uyku, sıkılma, ilgi isteme ve kendiliğinden küçük eylemler.
+    if d.basamak == KOSE:
+        return None  # köşedeyken sıkılma, uyku, ilgi isteme ve kendi eylemi yok
     gecen = t - d.son_yeni_olay
 
     if d.basamak in (DINLENME, ILGILENME, SIKILMA) and gecen >= ay.uyku_s:
@@ -272,6 +293,17 @@ def adim(d: BeyinDurumu, b1: BrainContext, rng: random.Random, ay: Ayarlar, tik:
         d.kullanici_var = True
         d.sonraki_ilgi = t + _aralik(rng, ay.ilgi_isteme_aralik_s)
 
+    # Köşede 10 dk dolduysa kedi çıkar (tik gelmese de ilk çağrıda fark edilir).
+    koseden_cikti = d.basamak == KOSE and t >= d.kose_bitis
+    if koseden_cikti:
+        d.basamak = DINLENME
+        d.son_yeni_olay = t
+        d.uzuntu_son = None
+        d.uzuntu_asama = 0
+        d.sonraki_kendi = t + _aralik(rng, ay.kendi_eylem_aralik_s)
+        if d.kullanici_var:
+            d.sonraki_ilgi = t + _aralik(rng, ay.ilgi_isteme_aralik_s)  # köşeden çıkar çıkmaz ilgi istemesin
+
     # Yeni olayları bul: B1 son 5 dk'yı taşır, aynı olayı tekrar saymamak için mutlak zamana bak.
     yeniler: list[tuple[float, str, float]] = []
     for olay in b1.recent_events:
@@ -296,6 +328,8 @@ def adim(d: BeyinDurumu, b1: BrainContext, rng: random.Random, ay: Ayarlar, tik:
             karar = k  # aynı anda birden çok olay gelirse en yenisi kazanır
     if taze_var:
         return karar  # yeni olay varsa zamana bağlı davranışlar bu çağrıda beklesin
+    if koseden_cikti:
+        return _karar_yap(ay.kose_cikis_tepkisi, ay.kose_cikis_tepkisi.siddet, "Köşeden çıktı: yeniden meraklı")
 
     karar = _zamana_bagli(d, t, rng, ay)
     if (

@@ -27,6 +27,7 @@ KLIP_OYUN = "playful"
 KLIP_UZGUN = "sad"
 KLIP_UYKU = "sleepy"
 KLIP_KORKU = "startled"
+KLIP_KOSE = None  # köşeye çekilme için özel klip yok; Reşat/Tuğra yapınca adı buraya yaz
 
 
 def _varsayilan_tepkiler() -> dict[str, Tepki]:
@@ -38,16 +39,16 @@ def _varsayilan_tepkiler() -> dict[str, Tepki]:
         "drowsy": Tepki("sleepy", 0.5, 10, KLIP_UYKU),
         "angry": Tepki("startled", 0.5, 5, KLIP_KORKU),  # geri çekilme
         "surprised": Tepki("curious", 0.6, 5, KLIP_MERAK),
-        "user_left": Tepki("sad", 0.7, 6, KLIP_UZGUN),  # arkasından bakma
+        "user_left": Tepki("curious", 0.5, 6, KLIP_MERAK),  # üzülmez, merakla arkasından bakar
     }
 
 
 def _varsayilan_uzuntu() -> tuple[Tepki, Tepki, Tepki]:
-    # Kullanıcı üzgünken merdiven: 1) merak 2) oyunbazlık 3) birlikte üzülme
+    # Kullanıcı üzgünken merdiven: 1) merak 2) oyun teklifi 3) köşesine çekilme
     return (
         Tepki("curious", 0.5, 6, KLIP_MERAK),
         Tepki("playful", 0.6, 6, KLIP_OYUN),
-        Tepki("sad", 0.5, 10, KLIP_UZGUN),
+        Tepki("idle", 0.2, 30, KLIP_KOSE),
     )
 
 
@@ -66,8 +67,8 @@ def _varsayilan_ruh_etkisi() -> dict[str, float]:
         "smile": 0.5,
         "looking_at_robot_long": 0.2,
         "user_arrived": 0.2,
-        "user_left": -0.3,
-        "sad": -0.1,
+        "user_left": 0.0,  # kalkınca üzülmez
+        "sad": 0.0,  # kullanıcı üzgünken kedi onunla birlikte üzülmez
         "angry": -0.2,
         "yawn": -0.05,
     }
@@ -105,6 +106,9 @@ class Ayarlar:
     uzuntu_asama_min_aralik_s: float = 20.0  # bu süre dolmadan aşama ilerlemez
     uzuntu_sifirla_s: float = 180.0  # üzgün olay gelmezse merdiven sıfırlanır
 
+    # --- Köşeye çekilme (oyun teklifi de işe yaramazsa) ---
+    kose_s: float = 600.0  # köşede kalma süresi (10 dk)
+
     # --- Sinirli kullanıcı ---
     geri_cekilme_sessizlik_s: float = 60.0  # bu süre kendi kendine eylem yok
 
@@ -121,6 +125,7 @@ class Ayarlar:
     tepkiler: dict[str, Tepki] = field(default_factory=_varsayilan_tepkiler)
     uzuntu: tuple[Tepki, Tepki, Tepki] = field(default_factory=_varsayilan_uzuntu)
     karsilama: dict[str, Tepki] = field(default_factory=_varsayilan_karsilama)
+    kose_cikis_tepkisi: Tepki = Tepki("curious", 0.3, 4, KLIP_MERAK)  # köşeden çıkarken
     sikilma_tepkisi: Tepki = Tepki("idle", 0.4, 6, KLIP_SIKILMA)
     uyku_tepkisi: Tepki = Tepki("sleepy", 0.5, 60, KLIP_UYKU)
     # Dinlenirken küçük eylemler: ruh haline göre havuz seçilir.
@@ -149,6 +154,7 @@ class Ayarlar:
             uzun_yokluk_s=40.0,
             uzuntu_asama_min_aralik_s=5.0,
             uzuntu_sifirla_s=40.0,
+            kose_s=60.0,
             geri_cekilme_sessizlik_s=15.0,
         )
 

@@ -5,7 +5,7 @@ from dataclasses import replace
 from datetime import datetime, timedelta
 
 from brain.ayarlar import VARSAYILAN, Ayarlar
-from brain.davranis import DavranisBeyni, DINLENME, ILGILENME, SIKILMA, UYKU, decide, karar_ver, sifirla
+from brain.davranis import DavranisBeyni, DINLENME, ILGILENME, KOSE, SIKILMA, UYKU, decide, karar_ver, sifirla
 from contracts import BrainContext, Decision
 
 T0 = datetime(2026, 11, 14, 12, 0, 0)
@@ -129,13 +129,16 @@ def test_uykudan_olayla_uyanir_sessiz_kalma_olsa_bile():
 
 # ---------------------------------------------------------------- üzüntü merdiveni
 
-def test_uzuntu_merdiveni():
+def test_uzuntu_merdiveni_merak_oyun_kose():
     beyin = DavranisBeyni(kesin(), tohum=1)
     a = beyin.isle(b1(0, [("sad", 0)]))
     b = beyin.isle(b1(30, [("sad", 0)]))
     c = beyin.isle(b1(60, [("sad", 0)]))
-    d = beyin.isle(b1(90, [("sad", 0)]))
-    assert [a.emotion, b.emotion, c.emotion, d.emotion] == ["curious", "playful", "sad", "sad"]
+    assert [a.emotion, b.emotion, c.emotion] == ["curious", "playful", "idle"]
+    assert "köşe" in c.reason and beyin.durum.basamak == KOSE
+    # birlikte üzülme yok: üzgün kullanıcıya kedi hiçbir aşamada "sad" olmaz
+    assert "sad" not in [a.emotion, b.emotion, c.emotion]
+    assert beyin.isle(b1(90, [("sad", 0)])) is None  # köşedeyken üzüntü sürse de yeni tepki yok
 
 
 def test_uzuntu_ayni_anda_tekrar_asama_ilerletmez():
@@ -155,10 +158,12 @@ def test_uzuntu_merdiveni_sifirlanir():
 
 # ---------------------------------------------------------------- gitme ve geri gelme
 
-def test_masadan_kalkinca_arkasindan_bakma():
+def test_masadan_kalkinca_uzulmez_merakla_arkasindan_bakar():
     beyin = DavranisBeyni(kesin(), tohum=1)
     k = beyin.isle(b1(0, [("user_left", 0)]))
-    assert k.emotion == "sad" and beyin.durum.kullanici_var is False
+    assert k.emotion == "curious" and k.clip == "curious"
+    assert beyin.durum.kullanici_var is False
+    assert beyin.durum.ruh_hali >= 0  # üzüntü ruh haline işlemez
 
 
 def karsilama(yokluk_s):
@@ -337,3 +342,63 @@ def test_tepkiden_hemen_sonra_kendi_eylemi_olmaz():
     beyin.isle(b1(50, [("yawn", 0)]), tik=True)
     gelen = tiklet(beyin, 51, 100, lambda sn: [("yawn", sn - 50)])
     assert gelen == []  # sayaç yawn anından yeniden başladı: ilk eylem ~110. sn
+
+
+# ---------------------------------------------------------------- köşeye çekilme
+
+# Üç üzgün olayla kediyi köşeye gönderir (0, 30, 60. sn).
+def kosede_beyin(**degisiklik):
+    beyin = DavranisBeyni(kesin(**degisiklik), tohum=1)
+    for sn in (0, 30, 60):
+        beyin.isle(b1(sn, [("sad", 0)]))
+    assert beyin.durum.basamak == KOSE
+    return beyin
+
+
+def test_kosede_10_dk_hicbir_kendiliginden_davranis_yok_sonra_merakla_cikar():
+    # uyku, kendi eylemi ve ilgi isteme normalde bu sürede tetiklenirdi; köşede hepsi susar
+    beyin = kosede_beyin(kendi_eylem_aralik_s=(60, 60), ilgi_isteme_aralik_s=(100, 100))
+    gelen = tiklet(beyin, 61, 700)
+    assert [(sn, k.emotion.value) for sn, k in gelen] == [(660, "curious")]
+    assert beyin.durum.basamak == DINLENME
+
+
+def test_kose_olay_gelince_de_biter_tik_olmasa_bile():
+    beyin = kosede_beyin()
+    k = beyin.isle(b1(700), tik=False)  # olaysız çağrı, 10 dk dolmuş
+    assert k.emotion == "curious" and beyin.durum.basamak == DINLENME
+
+
+def test_kosedeyken_uzun_bakis_yeniden_meraklandirir():
+    beyin = kosede_beyin()
+    k = beyin.isle(b1(100, [("looking_at_robot_long", 0)]))
+    assert k.emotion == "curious" and k.clip == "curious"
+    assert beyin.durum.basamak == ILGILENME and beyin.durum.uzuntu_asama == 0
+
+
+def test_kosede_uzun_bakis_sessiz_kalma_olsa_bile_tepki_verir():
+    ay = replace(VARSAYILAN, sessiz_taban_olasilik=1.0, sessiz_en_fazla=1.0)
+    beyin = DavranisBeyni(ay, tohum=1)
+    for sn in (0, 30, 60):
+        beyin.isle(b1(sn, [("sad", 0)]))
+    assert beyin.isle(b1(100, [("looking_at_robot_long", 0)])) is not None
+
+
+def test_kosedeyken_diger_olaylar_yok_sayilir():
+    beyin = kosede_beyin()
+    assert beyin.isle(b1(100, [("yawn", 0)])) is None
+    assert beyin.isle(b1(110, [("angry", 0)])) is None
+    assert beyin.durum.basamak == KOSE
+
+
+def test_kosedeyken_gulumseme_cikarir():
+    beyin = kosede_beyin()
+    k = beyin.isle(b1(100, [("smile", 0)]))
+    assert k.emotion == "happy" and beyin.durum.basamak == ILGILENME
+
+
+def test_kose_sonrasi_uzuntu_merdiveni_merakla_baslar():
+    beyin = kosede_beyin()
+    beyin.isle(b1(100, [("looking_at_robot_long", 0)]))
+    k = beyin.isle(b1(200, [("sad", 0)]))
+    assert k.emotion == "curious"

@@ -62,9 +62,10 @@ def test_zaman_asimi_kural_beynine_duser():
 
 
 # İnternet kopması gibi hatalar da yakalanmalı.
+# Kullanıcı kalkınca kedi üzülmez, merakla arkasından bakar (davranış ağacı kuralı).
 def test_baglanti_hatasi_kural_beynine_duser():
     karar = _sor([ConnectionError("internet yok")], olay="user_left")
-    assert karar.emotion == Emotion.SAD
+    assert karar.emotion == Emotion.CURIOUS
     assert "ConnectionError" in karar.reason
 
 
