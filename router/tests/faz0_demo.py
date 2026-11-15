@@ -6,18 +6,12 @@ from router.beyin_istemcisi import BaglamTutucu, beyne_sor
 from tools.fake_events import SahteOlayUreteci
 
 # REFLEKS TABLOSU: olay -> (animasyon, süre sn). Beyne sormadan hemen oynar.
-# REFLEKS TABLOSU: olay -> (animasyon, süre sn). Beyne sormadan hemen oynar.
-# Önerilen tepkiler contracts/common.py'deki yorumlardan: angry -> startled, surprised -> curious.
+# Sadece anında olması gereken tepkiler burada. Diğer olaylara (üzgün, esneme, sinirli...)
+# beyin (brain/kurallar.py) karar verir; refleks eklenirse kedi taklit eder ve beynin
+# kararıyla üst üste iki animasyon gider (Ferhat'ın kararı, 13 Kasım).
 REFLEKS_TABLOSU = {
     "user_arrived": ("idle", 0.0),
-    "user_left": ("sad", 0.0),
     "smile": ("smile", 1.5),
-    "yawn": ("sleepy", 0.0),
-    "drowsy": ("sleepy", 0.0),
-    "looking_at_robot_long": ("playful", 0.0),
-    "sad": ("sad", 0.0),
-    "angry": ("startled", 0.0),
-    "surprised": ("curious", 0.0),
 }
 
 # Arka plandaki beyin görevleri; referansı tutmazsak Python görevi silebilir.
@@ -44,13 +38,14 @@ async def sor_ve_oyna(baglam_nesnesi) -> None:
         duygu = ad_al(cevap.emotion)
         sure = float(cevap.duration_s)
         sebep = cevap.reason
+        klip = getattr(cevap, "clip", None)  # beyin belirli bir klip istediyse adı (yoksa None)
     except (AttributeError, TypeError, ValueError) as hata:
         # Saçma cevap: çökme, idle oynat ve devam et.
         print(f"[ROUTER] saçma cevap {cevap!r} ({hata!r}), idle'a dönülüyor")
         await animasyon_oynat("idle", kaynak="hata")
         return
-    print(f"[ROUTER] karar     <- {duygu} ({sebep})")
-    await animasyon_oynat(duygu, kaynak="karar", sure_s=sure)
+    print(f"[ROUTER] karar     <- {duygu}{f' klip={klip}' if klip else ''} ({sebep})")
+    await animasyon_oynat(duygu, kaynak="karar", sure_s=sure, klip=klip)
 
 
 async def mesaji_isle(mesaj, baglam: BaglamTutucu) -> None:

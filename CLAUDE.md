@@ -33,14 +33,15 @@ Beyin seçimi `.env` içinde `BEYIN=claude|sahte` (boşsa kural beyni). Simülat
 - **A1 face_track** (~15 Hz, sadece refleks): `{type:"face_track", t, present, x, y (0–1, sol üst 0,0), looking_at_robot}`
 - **A2 event**: `{type:"event", t, event, confidence (≥0.6), duration_s}` · event ∈ `user_arrived, user_left, smile, yawn, drowsy, looking_at_robot_long`
 - **B1** router → beyin: `{now, current_mood{emotion,intensity}, session{user_present_minutes,last_break_minutes_ago}, recent_events[{event,ago_s}], memories[≤5]}`
-- **B2** beyin → router: `{emotion, intensity 0–1, duration_s, memory_note|null, reason}` · emotion ∈ `idle, happy, curious, sleepy, sad, playful, startled`
+- **B2** beyin → router: `{emotion, intensity 0–1, duration_s, memory_note|null, reason, clip|null}` · emotion ∈ `idle, happy, curious, sleepy, sad, playful, startled`
+  - `clip` (isteğe bağlı): beynin istediği klibin adı = dosya adı (`motion/clips/hapsirma.json` → `"hapsirma"`, kimlik kuralı `contracts.clip_id()`, ESP32 aktarıcısıyla aynı). Boş → duyguya göre klip. Bilinmeyen ad → router yok sayar, loglar, duyguya göre devam eder.
   - Bozuk JSON / liste dışı duygu / >5 sn gecikme → router sessizce `idle`'a düşer ve loglar. Sistem LLM yüzünden asla durmaz; kurallı beyin yedekte kalır.
 - **C1** mantıksal poz (router → HAL): `{body_yaw, head_pan, head_tilt, ear_left, ear_right, ms}`
 - **C2** kablo (HAL → ESP32, 115200 baud, tek satır JSON + `\n`): `{v:1, seq, cmd: move|ping|neutral|anim, deg:[S0..S4], ms, name}` → `{ack:seq, ok}` / hata: `bad_json, bad_cmd, out_of_range`
   - ESP32: millis() ile yumuşak geçiş, sınır dışı açıyı reddeder, 3 sn mesaj yoksa nötre döner. Python her 1 sn `ping` atar. `anim` ESP32'ye gömülü klibi adıyla oynatır (bilinmeyen ad → `bad_cmd`); 256 karakterden uzun mesaj reddedilir.
 - **C3** animasyon klibi (Yüz Atölyesi → `motion/clips/*.json`): `{format:"C3", name, emotion, loop, duration_ms, keys:[{t_ms, ease, face{...}, pose{C1}}]}`
   - ease ∈ `smooth, stop, linear, snap, bounce` · ≥2 kare, ilk `t_ms`=0 · pose C1 aralıklarını aşmaz.
-  - Router 25 adım/sn oynatır: her 40 ms'de ara pozu (Yüz Atölyesi'yle aynı ease hesabı) `ms:40` ile C1 olarak yollar. Bir duyguya birden çok klip → router rastgele seçer. Beyin klip seçmez, sadece duygu (B2).
+  - Router 25 adım/sn oynatır: her 40 ms'de ara pozu (Yüz Atölyesi'yle aynı ease hesabı) `ms:40` ile C1 olarak yollar. Bir duyguya birden çok klip → router rastgele seçer. Beyin normalde sadece duygu seçer; isterse B2 `clip` ile belirli bir klibi adıyla ister.
 - Sabit listeler kapalıdır: listede olmayan değer gönderilmez, alıcı yok sayar.
 
 ## Servo eşlemesi (beta, 5 servo)

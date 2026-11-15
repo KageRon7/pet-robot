@@ -5,6 +5,7 @@ C2 ESP32'ye USB seri porttan giden tek satırlık JSON protokolüdür (fiziksel 
 C2 "anim" komutu ESP32'ye gömülü bir klibi (yüz + motorlar) adıyla oynatır; ESP32 adı bilmiyorsa bad_cmd döner.
 """
 
+import re
 from typing import Annotated, Literal
 
 from pydantic import Field, model_validator
@@ -101,3 +102,14 @@ class SerialReply(ContractModel):
         if self.ok and self.err is not None:
             raise ValueError("ok=true iken err olmamalı")
         return self
+
+
+# Klip dosya adını klibin kalıcı kimliğine çevirir (B2 "clip" alanı bu kimliği kullanır).
+# Kural ESP32 aktarıcısıyla (firmware/animasyon_aktar.py) aynıdır: harf, rakam ve _ dışındaki
+# her şey _ olur, sonra küçük harfe çevrilir. Örnek: "Head_Explosion(BuUM)" -> "head_explosion_buum".
+def clip_id(ad: str) -> str:
+    temiz = re.sub(r"[^A-Za-z0-9_]", "_", ad.removesuffix(".json"))
+    temiz = re.sub(r"_+", "_", temiz).strip("_")
+    if not temiz or temiz[0].isdigit():
+        temiz = "klip_" + temiz
+    return temiz.lower()
