@@ -1,0 +1,5 @@
+ESP32Servo
+ArduinoJson
+Adafruit GFX Library
+Adafruit ILI9341
+Adafruit BusIO

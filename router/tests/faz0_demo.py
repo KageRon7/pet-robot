@@ -1,11 +1,14 @@
 import asyncio
 import time
 
-from router.animasyon import animasyon_oynat
+from router.animasyon import animasyon_oynat, kapat
 from router.beyin_istemcisi import BaglamTutucu, beyne_sor
 from tools.fake_events import SahteOlayUreteci
 
 # REFLEKS TABLOSU: olay -> (animasyon, süre sn). Beyne sormadan hemen oynar.
+# Sadece anında olması gereken tepkiler burada. Diğer olaylara (üzgün, esneme, sinirli...)
+# beyin (brain/kurallar.py) karar verir; refleks eklenirse kedi taklit eder ve beynin
+# kararıyla üst üste iki animasyon gider (Ferhat'ın kararı, 13 Kasım).
 REFLEKS_TABLOSU = {
     "user_arrived": ("idle", 0.0),
     "smile": ("smile", 1.5),
@@ -35,13 +38,14 @@ async def sor_ve_oyna(baglam_nesnesi) -> None:
         duygu = ad_al(cevap.emotion)
         sure = float(cevap.duration_s)
         sebep = cevap.reason
+        klip = getattr(cevap, "clip", None)  # beyin belirli bir klip istediyse adı (yoksa None)
     except (AttributeError, TypeError, ValueError) as hata:
         # Saçma cevap: çökme, idle oynat ve devam et.
         print(f"[ROUTER] saçma cevap {cevap!r} ({hata!r}), idle'a dönülüyor")
         await animasyon_oynat("idle", kaynak="hata")
         return
-    print(f"[ROUTER] karar     <- {duygu} ({sebep})")
-    await animasyon_oynat(duygu, kaynak="karar", sure_s=sure)
+    print(f"[ROUTER] karar     <- {duygu}{f' klip={klip}' if klip else ''} ({sebep})")
+    await animasyon_oynat(duygu, kaynak="karar", sure_s=sure, klip=klip)
 
 
 async def mesaji_isle(mesaj, baglam: BaglamTutucu) -> None:
@@ -90,6 +94,7 @@ async def main(sure_s: float = 15, hiz: float = 20) -> None:
         for g in gorevler:
             g.cancel()
         await asyncio.gather(*gorevler, return_exceptions=True)
+        await kapat()  # ESP32HAL varsa nötr komutu gider
 
 
 if __name__ == "__main__":
@@ -106,5 +111,12 @@ if __name__ == "__main__":
         animasyon.hal_ayarla(hal)
         threading.Thread(target=lambda: asyncio.run(main(sure_s=120, hiz=1)), daemon=True).start()
         kok.mainloop()
+    elif "--esp32" in sys.argv:
+        # Wokwi'deki ESP32'ye bağlanır, gerçek zamanlı.
+        from router import animasyon
+        from router.hal import ESP32HAL
+
+        animasyon.hal_ayarla(ESP32HAL())
+        asyncio.run(main(sure_s=60, hiz=1))
     else:
         asyncio.run(main())

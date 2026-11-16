@@ -15,6 +15,7 @@ from contracts import (
     Pose,
     SerialCommand,
     SerialReply,
+    clip_id,
     ear_to_deg,
 )
 
@@ -137,6 +138,30 @@ def test_decision_falls_back_to_idle(raw):
     assert Decision.parse_or_idle(raw).emotion is Emotion.IDLE
 
 
+# B2 "clip" alanı isteğe bağlıdır: yoksa None, varsa olduğu gibi okunur (13 Kasım).
+def test_decision_clip_optional():
+    eski = '{"emotion": "happy", "intensity": 0.8, "duration_s": 4}'
+    assert Decision.parse_or_idle(eski).clip is None
+    yeni = '{"emotion": "playful", "intensity": 0.5, "duration_s": 3, "clip": "hapsirma"}'
+    karar = Decision.parse_or_idle(yeni)
+    assert karar.emotion is Emotion.PLAYFUL and karar.clip == "hapsirma"
+
+
+# Klip kimliği ESP32 aktarıcısıyla aynı kuralla üretilmeli.
+@pytest.mark.parametrize(
+    "ad, beklenen",
+    [
+        ("happy", "happy"),
+        ("happy.json", "happy"),
+        ("Head_Explosion(BuUM)", "head_explosion_buum"),
+        ("Im_so_boored", "im_so_boored"),
+        ("2kafa", "klip_2kafa"),
+    ],
+)
+def test_clip_id(ad, beklenen):
+    assert clip_id(ad) == beklenen
+
+
 # ---------- C1: mantıksal poz ----------
 
 # Sınır içindeki poz kabul edilmeli, sınır dışı reddedilmeli.
@@ -174,6 +199,12 @@ def test_ping_command_line():
     assert json.loads(SerialCommand(seq=43, cmd="ping").to_line()) == {"v": 1, "seq": 43, "cmd": "ping"}
 
 
+# anim komutu klip adını taşımalı, deg ve ms yazılmamalı.
+def test_anim_command_line():
+    line = SerialCommand(seq=44, cmd="anim", name="happy").to_line()
+    assert json.loads(line) == {"v": 1, "seq": 44, "cmd": "anim", "name": "happy"}
+
+
 # Hatalı komutlar reddedilmeli.
 @pytest.mark.parametrize(
     "data",
@@ -183,6 +214,10 @@ def test_ping_command_line():
         {"seq": 1, "cmd": "move", "deg": [90, 90, 90, 90, 90]},  # ms yok
         {"seq": 1, "cmd": "ping", "deg": [90, 90, 90, 90, 90]},  # ping'de açı
         {"seq": 1, "cmd": "dance"},  # liste dışı komut
+        {"seq": 1, "cmd": "anim"},  # anim'de klip adı yok
+        {"seq": 1, "cmd": "anim", "name": ""},  # boş klip adı
+        {"seq": 1, "cmd": "anim", "name": "happy", "ms": 300},  # anim'de ms
+        {"seq": 1, "cmd": "ping", "name": "happy"},  # ping'de klip adı
         {"v": 2, "seq": 1, "cmd": "ping"},  # yanlış sürüm
     ],
 )
