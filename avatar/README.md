@@ -7,6 +7,7 @@ Bu klasör, masadaki robot kedinin **bilgisayar ekranındaki hali** içindir.
 - **Küçük, tam vücutlu, kutu kafalı bir kedi.** Kafasında robotun yüz ekranındaki yüzler görünür; gövde basit şekillerle kodla çizilir (Tuğra sonra güzelleştirir).
 - **Kendi iradesi var.** Ekranın sol kenarından kendiliğinden girer, dolaşır, oturur, uyur; sonra yine sol kenardan "evine" gider.
 - **Oyunlarda rahatsız etmez.** Kullanıcı izin verirse oyunda dikkat dağıtmayan bir köşeye kıvrılır (LoL'de mini haritanın üstü, CS'de skor sayacının yanı, Stardew'de envanterin üstü). Tam ekran oyunlar için oyun "kenarlıksız pencere" modunda açılmalı.
+- **Okşanınca tepki verir.** Masadaki kediyi okşayınca (kafadaki dokunma bandı) ekrandaki kedi de buna sevinir.
 - **Hub (kedinin evi):** bağ (kediyle ne kadar yakınız), günlük, ayarlar. Mama bir **ödüldür**; kedi aç kaldı diye asla küsmez.
 
 ## Gizlilik kuralı
@@ -20,7 +21,7 @@ Kamera kuralı ekran için de geçerli: ekran görüntüsü **asla** kaydedilmez
 
 ## Sıradaki adımlar
 1. **Yaşayan kedi:** masaüstünde her şeyin üstünde duran saydam bir pencerede kedi durur, yürür, oturur, uyur; ruh hali masadaki kediyle aynı.
-2. **İlk oyun: League of Legends.** Kedi izinle mini haritanın üstüne kıvrılır.
-3. Sonra: Hub (bağ, günlük, ayarlar), en son ekran okuma.
+2. **İlk oyun: League of Legends** (Ferhat seçti, 17 Kasım). Kedi izinle mini haritanın üstüne kıvrılır.
+3. Sonra: Hub (bağ, günlük, ayarlar), okşama tepkisi (dokunma bandı takılınca), en son ekran okuma.
 
 Planın tamamı: "Avatar Uygulaması Planı" belgesi (claude.ai/artifact/9Krypyzp3vUvMQL2eCRCWG).

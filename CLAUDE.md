@@ -61,6 +61,7 @@ Not: Yüz ekranı ESP32'de; klipler `firmware/animasyon_aktar.py` ile karta göm
 
 ## Kurallar
 - Gizlilik: kamera görüntüsü router'a, LLM'e veya diske **asla** gitmez. Hafızaya sadece `memory_note` yazılır.
+- Gizlilik (ekran, avatar): ekran görüntüsü de diske **asla** kaydedilmez ve bilgisayardan dışarı (LLM, internet, başka cihaz) **asla** çıkmaz. Ekrandan sadece olay (ör. "oyunda clutch") çıkar, görüntü değil.
 - API anahtarı `.env`'de, `.env` `.gitignore`'da. Anahtarı koda, loga, commit'e yazma.
 - `main`'e doğrudan push yok; dal adı `takim/is` (örn. `cv/smile-detection`), PR + ikili partner onayı.
 - Kod stili: temiz OOP, hata toleranslı, asyncio uyumlu (bloklayan çağrı yok). Fonksiyonların üstüne **yeni başlayanlar için Türkçe yorum**.
