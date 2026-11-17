@@ -1,0 +1,275 @@
+{
+  "format": "C3-taslak",
+  "name": "Yakalandık",
+  "emotion": "playful",
+  "loop": false,
+  "duration_ms": 4420,
+  "keys": [
+    {
+      "t_ms": 40,
+      "ease": "smooth",
+      "face": {
+        "eye_shape": "round",
+        "eye_open": 0.9,
+        "eye_size": 1.1,
+        "pupil": 0.9,
+        "sparkle": 1,
+        "look_x": -0.75,
+        "look_y": -0.9,
+        "brow_show": true,
+        "brow_left": 3,
+        "brow_right": 3,
+        "brow_height": 0.4,
+        "mouth": "smile",
+        "mouth_open": 1,
+        "tears": 0,
+        "blush": true,
+        "sweat": false,
+        "colors": {
+          "line": "#2B2A33",
+          "iris": "#6B4A3A",
+          "blush": "#F09AA6",
+          "tear": "#5DADE2",
+          "face_bg": "#FBF8F3",
+          "head": "#8E929C"
+        }
+      },
+      "pose": {
+        "body_yaw": -10,
+        "head_pan": -25,
+        "head_tilt": 10,
+        "ear_left": 0.86,
+        "ear_right": 0.86,
+        "ms": 40
+      }
+    },
+    {
+      "t_ms": 880,
+      "ease": "bounce",
+      "face": {
+        "eye_shape": "round",
+        "eye_open": 0.9,
+        "eye_size": 1.1,
+        "pupil": 0.9,
+        "sparkle": 1,
+        "look_x": -0.92,
+        "look_y": 0.77,
+        "brow_show": true,
+        "brow_left": 3,
+        "brow_right": 3,
+        "brow_height": 0.4,
+        "mouth": "w",
+        "mouth_open": 1,
+        "tears": 0,
+        "blush": true,
+        "sweat": false,
+        "colors": {
+          "line": "#2B2A33",
+          "iris": "#6B4A3A",
+          "blush": "#F09AA6",
+          "tear": "#5DADE2",
+          "face_bg": "#FBF8F3",
+          "head": "#8E929C"
+        }
+      },
+      "pose": {
+        "body_yaw": -10,
+        "head_pan": -25,
+        "head_tilt": 10,
+        "ear_left": 0.86,
+        "ear_right": 0.86,
+        "ms": 840
+      }
+    },
+    {
+      "t_ms": 1570,
+      "ease": "smooth",
+      "face": {
+        "eye_shape": "round",
+        "eye_open": 0.9,
+        "eye_size": 1.1,
+        "pupil": 0.9,
+        "sparkle": 1,
+        "look_x": -0.02,
+        "look_y": 1,
+        "brow_show": true,
+        "brow_left": 3,
+        "brow_right": 3,
+        "brow_height": 0.4,
+        "mouth": "w",
+        "mouth_open": 1,
+        "tears": 0,
+        "blush": true,
+        "sweat": false,
+        "colors": {
+          "line": "#2B2A33",
+          "iris": "#6B4A3A",
+          "blush": "#F09AA6",
+          "tear": "#5DADE2",
+          "face_bg": "#FBF8F3",
+          "head": "#8E929C"
+        }
+      },
+      "pose": {
+        "body_yaw": -10,
+        "head_pan": -25,
+        "head_tilt": 10,
+        "ear_left": 0.86,
+        "ear_right": 0.86,
+        "ms": 690
+      }
+    },
+    {
+      "t_ms": 2240,
+      "ease": "bounce",
+      "face": {
+        "eye_shape": "round",
+        "eye_open": 0.9,
+        "eye_size": 1.1,
+        "pupil": 0.9,
+        "sparkle": 1,
+        "look_x": 1,
+        "look_y": 1,
+        "brow_show": true,
+        "brow_left": 3,
+        "brow_right": 3,
+        "brow_height": 0.4,
+        "mouth": "w",
+        "mouth_open": 1,
+        "tears": 0,
+        "blush": true,
+        "sweat": false,
+        "colors": {
+          "line": "#2B2A33",
+          "iris": "#6B4A3A",
+          "blush": "#F09AA6",
+          "tear": "#5DADE2",
+          "face_bg": "#FBF8F3",
+          "head": "#8E929C"
+        }
+      },
+      "pose": {
+        "body_yaw": -10,
+        "head_pan": -25,
+        "head_tilt": 10,
+        "ear_left": 0.86,
+        "ear_right": 0.86,
+        "ms": 670
+      }
+    },
+    {
+      "t_ms": 2880,
+      "ease": "smooth",
+      "face": {
+        "eye_shape": "round",
+        "eye_open": 0.9,
+        "eye_size": 1.1,
+        "pupil": 0.9,
+        "sparkle": 1,
+        "look_x": 1,
+        "look_y": -0.36,
+        "brow_show": true,
+        "brow_left": 3,
+        "brow_right": 3,
+        "brow_height": 0.4,
+        "mouth": "w",
+        "mouth_open": 1,
+        "tears": 0,
+        "blush": true,
+        "sweat": false,
+        "colors": {
+          "line": "#2b2a33",
+          "iris": "#6b4a3a",
+          "blush": "#f09aa6",
+          "tear": "#5dade2",
+          "face_bg": "#fbf8f3",
+          "head": "#8e929c"
+        }
+      },
+      "pose": {
+        "body_yaw": -10,
+        "head_pan": -25,
+        "head_tilt": 10,
+        "ear_left": 0.86,
+        "ear_right": 0.86,
+        "ms": 640
+      }
+    },
+    {
+      "t_ms": 3580,
+      "ease": "bounce",
+      "face": {
+        "eye_shape": "round",
+        "eye_open": 0.9,
+        "eye_size": 1.1,
+        "pupil": 0.9,
+        "sparkle": 1,
+        "look_x": 0,
+        "look_y": -0.97,
+        "brow_show": true,
+        "brow_left": 3,
+        "brow_right": 3,
+        "brow_height": 0.4,
+        "mouth": "w",
+        "mouth_open": 0,
+        "tears": 0,
+        "blush": true,
+        "sweat": false,
+        "colors": {
+          "line": "#2B2A33",
+          "iris": "#6B4A3A",
+          "blush": "#F09AA6",
+          "tear": "#5DADE2",
+          "face_bg": "#FBF8F3",
+          "head": "#8E929C"
+        }
+      },
+      "pose": {
+        "body_yaw": -10,
+        "head_pan": -25,
+        "head_tilt": 10,
+        "ear_left": 0.86,
+        "ear_right": 0.86,
+        "ms": 700
+      }
+    },
+    {
+      "t_ms": 4420,
+      "ease": "stop",
+      "face": {
+        "eye_shape": "round",
+        "eye_open": 0.9,
+        "eye_size": 1.1,
+        "pupil": 0.9,
+        "sparkle": 1,
+        "look_x": 0.2,
+        "look_y": -1,
+        "brow_show": true,
+        "brow_left": 6,
+        "brow_right": 9,
+        "brow_height": 0.56,
+        "mouth": "smile",
+        "mouth_open": 1,
+        "tears": 0,
+        "blush": true,
+        "sweat": true,
+        "colors": {
+          "line": "#2B2A33",
+          "iris": "#6B4A3A",
+          "blush": "#F09AA6",
+          "tear": "#5DADE2",
+          "face_bg": "#FBF8F3",
+          "head": "#8E929C"
+        }
+      },
+      "pose": {
+        "body_yaw": -10,
+        "head_pan": -25,
+        "head_tilt": 10,
+        "ear_left": 0.67,
+        "ear_right": 0.67,
+        "ms": 840
+      }
+    }
+  ]
+}
