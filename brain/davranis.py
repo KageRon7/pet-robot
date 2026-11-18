@@ -52,7 +52,7 @@ class BeyinDurumu:
     kullanici_var: bool | None = None  # None = bilinmiyor
     varlik_zamani: float = 0.0  # kullanici_var'ı belirleyen olayın zamanı (eski olay ezmesin)
     ayrilma_zamani: float | None = None
-    uzuntu_asama: int = 0  # 0 merak, 1 oyunbaz, 2 birlikte üzülme
+    uzuntu_asama: int = 0  # 0 merak, 1 oyunbaz, 2 köşeye çekilme
     uzuntu_asama_zamani: float | None = None
     uzuntu_son: float | None = None
     sessizlik_bitis: float = 0.0  # bu zamana kadar kendiliğinden eylem yok
