@@ -32,5 +32,10 @@ desktop.ini
 *.avi
 recordings/
 
+# Dijital ikiz raporu: her çalıştırmada yeniden yazılır
+sim/rapor.md
+sim/panel_verisi.json
+sim/panel/kedi_tezgahi.html
+
 # Yüz verisi (sadece sayılar, görüntü yok): kişisel, şimdilik GitHub'a gönderilmez
 veri/
