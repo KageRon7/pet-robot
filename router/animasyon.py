@@ -1,16 +1,16 @@
 """
 Animasyon yolu.
 
-Ne iÅŸe yarar: Router'Ä±n animasyon istediÄŸi tek nokta. Duygu adÄ±nÄ± (ve beyin belirli bir klip
-istediyse klip adÄ±nÄ±) HAL'a iletir. SeÃ§im sÄ±rasÄ±:
+Ne işe yarar: Router'ın animasyon istediği tek nokta. Duygu adını (ve beyin belirli bir klip
+istediyse klip adını) HAL'a iletir. Seçim sırası:
   1. Beyin klip istediyse (Decision.clip) ve HAL o klibi biliyorsa o oynar.
-  2. AynÄ± duygunun birden Ã§ok klibi varsa (curious, curious2, happy_2 ...) rastgele biri seÃ§ilir,
-     arka arkaya aynÄ± klip tekrarlanmaz. EÅŸleÅŸme klip ADINA gÃ¶redir (emotion alanÄ±na deÄŸil).
-  3. HiÃ§biri yoksa takma ad, o da yoksa idle.
-AÃ§Ä±lÄ±ÅŸta "gunaydin", kapanÄ±rken "iyi_geceler" klibi oynar (klip yoksa happy / sleepy).
-klip_oynuyor(): kafa takibi, klip sÃ¼rerken durmak iÃ§in bunu sorar.
+  2. Aynı duygunun birden çok klibi varsa (curious, curious2, happy_2 ...) rastgele biri seçilir,
+     arka arkaya aynı klip tekrarlanmaz. Eşleşme klip ADINA göredir (emotion alanına değil).
+  3. Hiçbiri yoksa takma ad, o da yoksa idle.
+Açılışta "gunaydin", kapanırken "iyi_geceler" klibi oynar (klip yoksa happy / sleepy).
+klip_oynuyor(): kafa takibi, klip sürerken durmak için bunu sorar.
 
-GÃ¼venlik: klip yoksa ya da hata olursa program Ã§Ã¶kmez, idle'a dÃ¶ner.
+Güvenlik: klip yoksa ya da hata olursa program çökmez, idle'a döner.
 """
 
 import asyncio
@@ -26,14 +26,14 @@ from router.hal import KonsolHAL
 
 KLIP_KLASORU = Path(__file__).resolve().parent.parent / "motion" / "clips"
 
-# HAL'Ä±n klibi olmayan adlar iÃ§in geÃ§ici eÅŸleme (Ã¶rn. simÃ¼latÃ¶rde smile klibi yok).
+# HAL'ın klibi olmayan adlar için geçici eşleme (örn. simülatörde smile klibi yok).
 TAKMA_AD = {"smile": "happy"}
 
-# AÃ§Ä±lÄ±ÅŸ ve kapanÄ±ÅŸ klipleri; klip henÃ¼z yoksa yedeÄŸi oynar. TuÄŸra klibi ekleyince kod deÄŸiÅŸmez.
-# AÃ§Ä±lÄ±ÅŸ ve kapanÄ±ÅŸ klipleri, dÃ¶neme gÃ¶re (gun_zamani.donem(): "gunduz" / "gece").
-# SÄ±radaki ilk bilinen klip oynar; hiÃ§biri yoksa yedek duygu. TuÄŸra klip ekleyince sadece burasÄ± deÄŸiÅŸir.
-# AÃ§Ä±lÄ±ÅŸ ve kapanÄ±ÅŸ klipleri, dÃ¶neme gÃ¶re (gun_zamani.donem(): "gunduz" / "gece").
-# SÄ±radaki ilk bilinen klip oynar; hiÃ§biri yoksa yedek duygu. Gece GÃ¼naydÄ±n oynamaz.
+# Açılış ve kapanış klipleri; klip henüz yoksa yedeği oynar. Tuğra klibi ekleyince kod değişmez.
+# Açılış ve kapanış klipleri, döneme göre (gun_zamani.donem(): "gunduz" / "gece").
+# Sıradaki ilk bilinen klip oynar; hiçbiri yoksa yedek duygu. Tuğra klip ekleyince sadece burası değişir.
+# Açılış ve kapanış klipleri, döneme göre (gun_zamani.donem(): "gunduz" / "gece").
+# Sıradaki ilk bilinen klip oynar; hiçbiri yoksa yedek duygu. Gece Günaydın oynamaz.
 ACILIS_ADAYLARI = {
     "gunduz": ("gunaydin_gunduz", "gunaydin"),
     "gece": ("gunaydin_gece",),
@@ -44,29 +44,29 @@ KAPANIS_ADAYLARI = {
     "gece": ("iyi_geceler_gece", "iyi_geceler"),
 }
 KAPANIS_YEDEK = {"gunduz": "sleepy", "gece": "sleepy"}
-KAPANIS_EN_FAZLA_S = 8.0  # kapanÄ±rken klibi en fazla bu kadar bekle
-VARSAYILAN_KLIP_S = 4.0  # sÃ¼resi bilinmeyen klip iÃ§in
-KLIP_PAYI_S = 0.3  # klip bittikten sonra kÄ±sa pay
+KAPANIS_EN_FAZLA_S = 8.0  # kapanırken klibi en fazla bu kadar bekle
+VARSAYILAN_KLIP_S = 4.0  # süresi bilinmeyen klip için
+KLIP_PAYI_S = 0.3  # klip bittikten sonra kısa pay
 
 _hal = KonsolHAL()
-_son_secim: dict[str, str] = {}  # duygu -> en son seÃ§ilen klip (arka arkaya tekrarÄ± Ã¶nlemek iÃ§in)
-_sureler: dict[str, float] | None = None  # klip kimliÄŸi -> sÃ¼re (sn), motion/clips'ten okunur
-_klip_bitis = 0.0  # time.monotonic() cinsinden, ÅŸu an oynayan (idle dÄ±ÅŸÄ±) klibin bitiÅŸi
+_son_secim: dict[str, str] = {}  # duygu -> en son seçilen klip (arka arkaya tekrarı önlemek için)
+_sureler: dict[str, float] | None = None  # klip kimliği -> süre (sn), motion/clips'ten okunur
+_klip_bitis = 0.0  # time.monotonic() cinsinden, şu an oynayan (idle dışı) klibin bitişi
 
 
 def hal_ayarla(hal) -> None:
-    """Demo ya da ana program hangi HAL'Ä±n kullanÄ±lacaÄŸÄ±nÄ± buradan seÃ§er."""
+    """Demo ya da ana program hangi HAL'ın kullanılacağını buradan seçer."""
     global _hal
     _hal = hal
 
 
 def hal_al():
-    """Å�u an seÃ§ili HAL (kafa takibi move komutu iÃ§in ona ulaÅŸÄ±r)."""
+    """Şu an seçili HAL (kafa takibi move komutu için ona ulaşır)."""
     return _hal
 
 
 def klip_oynuyor(simdi: float | None = None) -> bool:
-    """Idle dÄ±ÅŸÄ± bir klip ÅŸu an oynuyor mu? (sÃ¼re motion/clips'teki duration_ms'ten)"""
+    """Idle dışı bir klip şu an oynuyor mu? (süre motion/clips'teki duration_ms'ten)"""
     simdi = time.monotonic() if simdi is None else simdi
     return simdi < _klip_bitis
 
@@ -96,10 +96,10 @@ def _klip_bitisini_ayarla(klip: str) -> None:
 
 
 def istenen_klibi_bul(klip: str | None) -> str | None:
-    """Beynin adÄ±yla istediÄŸi klibi (B2 "clip") HAL'da arar; bulamazsa None dÃ¶ner.
+    """Beynin adıyla istediği klibi (B2 "clip") HAL'da arar; bulamazsa None döner.
 
-    Ã–nce adÄ±n kendisine, sonra kalÄ±cÄ± kimliÄŸine bakar (simÃ¼latÃ¶r dosya adÄ±nÄ±,
-    ESP32 kÃ¼Ã§Ã¼k harfli kimliÄŸi tanÄ±r). Bilinmeyen ad sadece loglanÄ±r, hata vermez.
+    Önce adın kendisine, sonra kalıcı kimliğine bakar (simülatör dosya adını,
+    ESP32 küçük harfli kimliği tanır). Bilinmeyen ad sadece loglanır, hata vermez.
     """
     if not klip:
         return None
@@ -108,24 +108,24 @@ def istenen_klibi_bul(klip: str | None) -> str | None:
             if _hal.bilinen(aday):
                 return aday
     except Exception as hata:
-        print(f"[ANÄ°MASYON] HATA: klip aranÄ±rken {hata!r}")
+        print(f"[ANİMASYON] HATA: klip aranırken {hata!r}")
         return None
-    print(f"[ANÄ°MASYON] UYARI: '{klip}' adÄ±nda klip yok, duyguya gÃ¶re devam ediliyor")
+    print(f"[ANİMASYON] UYARI: '{klip}' adında klip yok, duyguya göre devam ediliyor")
     return None
 
 
 def varyant_sec(duygu: str) -> str:
-    """Duygunun klibini seÃ§er. Kurallar:
-      - DÃ¶neme Ã¶zel klip varsa (sleepy_gece / sleepy_gunduz) o dÃ¶nemde sadece o seÃ§ilir.
-      - Yoksa eksiz klipler arasÄ±ndan seÃ§ilir (curious / curious2 / happy_2); Ã¶bÃ¼r dÃ¶nemin klibi seÃ§ilmez.
-      - Birden Ã§ok aday varsa rastgele, art arda aynÄ±sÄ± olmaz.
-    HAL klip listesini vermiyorsa (klip_adlari yok) ya da hiÃ§ aday yoksa duygunun kendi adÄ± dÃ¶ner.
+    """Duygunun klibini seçer. Kurallar:
+      - Döneme özel klip varsa (sleepy_gece / sleepy_gunduz) o dönemde sadece o seçilir.
+      - Yoksa eksiz klipler arasından seçilir (curious / curious2 / happy_2); öbür dönemin klibi seçilmez.
+      - Birden çok aday varsa rastgele, art arda aynısı olmaz.
+    HAL klip listesini vermiyorsa (klip_adlari yok) ya da hiç aday yoksa duygunun kendi adı döner.
     """
     fonksiyon = getattr(_hal, "klip_adlari", None)
     if fonksiyon is None:
         return duygu
     kalip = re.compile(re.escape(duygu) + r"(?:_(gece|gunduz))?(_?\d+)?")
-    eslesenler = []  # (klip adÄ±, dÃ¶nem eki ya da None)
+    eslesenler = []  # (klip adı, dönem eki ya da None)
     for ad in fonksiyon():
         eslesme = kalip.fullmatch(ad)
         if eslesme:
@@ -142,35 +142,35 @@ def varyant_sec(duygu: str) -> str:
 
 
 async def animasyon_oynat(ad: str, kaynak: str, sure_s: float = 0.0, klip: str | None = None) -> None:
-    """Duyguyu (ya da beynin adÄ±yla istediÄŸi klibi) HAL'a oynatÄ±r; hata olursa idle'a dÃ¶ner."""
+    """Duyguyu (ya da beynin adıyla istediği klibi) HAL'a oynatır; hata olursa idle'a döner."""
     gercek = ad
     try:
         gercek = istenen_klibi_bul(klip) or varyant_sec(ad)
         if not _hal.bilinen(gercek):
-            gercek = varyant_sec(TAKMA_AD.get(ad, ad))  # HAL'Ä±n klibi yoksa takma ad dene
+            gercek = varyant_sec(TAKMA_AD.get(ad, ad))  # HAL'ın klibi yoksa takma ad dene
         if not _hal.bilinen(gercek):
-            print(f"[ANÄ°MASYON] UYARI: '{ad}' iÃ§in klip yok, idle'a dÃ¶nÃ¼lÃ¼yor")
+            print(f"[ANİMASYON] UYARI: '{ad}' için klip yok, idle'a dönülüyor")
             gercek = "idle"
-        print(f"[ANÄ°MASYON] {gercek:<9} kaynak={kaynak}")
+        print(f"[ANİMASYON] {gercek:<9} kaynak={kaynak}")
         _klip_bitisini_ayarla(gercek)
         await _hal.duygu_oynat(gercek, kaynak, sure_s)
     except Exception as hata:
-        print(f"[ANÄ°MASYON] HATA: {hata!r}, idle'a dÃ¶nÃ¼lÃ¼yor")
+        print(f"[ANİMASYON] HATA: {hata!r}, idle'a dönülüyor")
         if gercek != "idle":
             try:
                 _klip_bitisini_ayarla("idle")
                 await _hal.duygu_oynat("idle", "hata", 0.0)
             except Exception as hata2:
-                print(f"[ANÄ°MASYON] idle de oynatÄ±lamadÄ±: {hata2!r}")
+                print(f"[ANİMASYON] idle de oynatılamadı: {hata2!r}")
 
 
 async def _ozel_klip_oynat(adaylar: tuple[str, ...], yedek: str, kaynak: str) -> float:
-    """Adaylardan ilk bilineni oynatÄ±r; hiÃ§biri yoksa yedek duyguyu. SÃ¼resini (sn) dÃ¶ndÃ¼rÃ¼r, hiÃ§biri yoksa 0."""
+    """Adaylardan ilk bilineni oynatır; hiçbiri yoksa yedek duyguyu. Süresini (sn) döndürür, hiçbiri yoksa 0."""
     for ad in adaylar:
         if _hal.bilinen(ad):
             await animasyon_oynat(ad, kaynak, klip=ad)
             return _klip_sureleri().get(clip_id(ad), VARSAYILAN_KLIP_S)
-    print(f"[ANÄ°MASYON] {', '.join(adaylar)} klibi yok, yerine '{yedek}' oynuyor")
+    print(f"[ANİMASYON] {', '.join(adaylar)} klibi yok, yerine '{yedek}' oynuyor")
     if not (_hal.bilinen(yedek) or getattr(_hal, "klip_adlari", None)):
         return 0.0
     await animasyon_oynat(yedek, kaynak)
@@ -178,7 +178,7 @@ async def _ozel_klip_oynat(adaylar: tuple[str, ...], yedek: str, kaynak: str) ->
 
 
 async def acilis_oynat() -> None:
-    """Program aÃ§Ä±lÄ±nca (dÃ¶neme gÃ¶re) aÃ§Ä±lÄ±ÅŸ klibi. GerÃ§ek robotta baÄŸlantÄ± kurulana kadar (en fazla 5 sn) bekler."""
+    """Program açılınca (döneme göre) açılış klibi. Gerçek robotta bağlantı kurulana kadar (en fazla 5 sn) bekler."""
     try:
         bekle = getattr(_hal, "baglanti_bekle", None)
         if bekle is not None:
@@ -186,18 +186,18 @@ async def acilis_oynat() -> None:
         d = donem()
         await _ozel_klip_oynat(ACILIS_ADAYLARI[d], ACILIS_YEDEK[d], "acilis")
     except Exception as hata:
-        print(f"[ANÄ°MASYON] aÃ§Ä±lÄ±ÅŸ klibi oynatÄ±lamadÄ±: {hata!r}")
+        print(f"[ANİMASYON] açılış klibi oynatılamadı: {hata!r}")
 
 
 async def kapat() -> None:
-    """Program kapanÄ±rken Ä°yi geceler klibi, sonra HAL'a haber (ESP32HAL nÃ¶tr komutunu gÃ¶nderir)."""
+    """Program kapanırken İyi geceler klibi, sonra HAL'a haber (ESP32HAL nötr komutunu gönderir)."""
     kapat_fonksiyonu = getattr(_hal, "kapat", None)
     try:
         d = donem()
         sure = await _ozel_klip_oynat(KAPANIS_ADAYLARI[d], KAPANIS_YEDEK[d], "kapanis")
-        if sure and kapat_fonksiyonu is not None:  # sadece gerÃ§ek robotta klibin bitmesini bekle
+        if sure and kapat_fonksiyonu is not None:  # sadece gerçek robotta klibin bitmesini bekle
             await asyncio.sleep(min(sure, KAPANIS_EN_FAZLA_S))
     except Exception as hata:
-        print(f"[ANÄ°MASYON] kapanÄ±ÅŸ klibi oynatÄ±lamadÄ±: {hata!r}")
+        print(f"[ANİMASYON] kapanış klibi oynatılamadı: {hata!r}")
     if kapat_fonksiyonu is not None:
         await asyncio.to_thread(kapat_fonksiyonu)
