@@ -57,7 +57,7 @@ Kulak → derece: 1 = 150°, 0 = 60°, nötr 0.8 ≈ 132° (sağ kulak ters: 1 =
 Güç: 5V 5A harici, ESP32 ile ortak GND; servolar ESP32'den beslenmez. Yüz ekranı: 2.4" ILI9341 SPI 320×240.
 Kuyruk ve patiler vize sonrası (yeni sözleşme sürümüyle girer). Ölçü değişirse önce teknik resim, sonra sözleşme güncellenir.
 
-Not: Yüz ekranı ESP32'de; klipler `firmware/animasyon_aktar.py` ile karta gömülür ve `anim` ile oynatılır.
+Not: Yüz ekranı ESP32'de; klipler derlemede `firmware/animasyon_oynatma/klipleri_hazirla.py` ile `motion/clips/`'ten otomatik karta gömülür ve `anim` ile oynatılır. Klip adı = `contracts.clip_id()` (Türkçe harf → ASCII: `derın_uyku` → `derin_uyku`).
 
 ## Kurallar
 - Gizlilik: kamera görüntüsü router'a, LLM'e veya diske **asla** gitmez. Hafızaya sadece `memory_note` yazılır.
@@ -69,7 +69,7 @@ Not: Yüz ekranı ESP32'de; klipler `firmware/animasyon_aktar.py` ile karta göm
 - RAG hafızası şimdilik dondurulmuş (vize sonrası).
 
 ## Claude için çalışma notları (token tasarrufu)
-- **`firmware/animasyon_oynatma/include/animasyonlar.h` otomatik üretilir (~4300 satır): kullanıcı açıkça istemedikçe okuma, elle de düzenleme.** Klip değişince `python firmware/animasyon_aktar.py` ile yeniden üretilir.
+- **`firmware/animasyon_oynatma/include/gomulu_klipler.h` derlemede otomatik üretilir (git'e girmez, çok büyük): kullanıcı açıkça istemedikçe okuma, elle de düzenleme.** Eski `animasyonlar.h` ve `firmware/animasyon_aktar.py` artık kullanılmıyor.
 - `motion/clips/*.json` dosyalarının hepsini okuma; gerekirse bir tanesine bak, format zaten yukarıda.
 - Kodda bir şey ararken, `graphify-out/` klasörü varsa (sadece Ferhat'ın bilgisayarında; git'e girmez) önce `graphify-out/GRAPH_REPORT.md` dosyasına bak (hangi sınıf/fonksiyon nerede, kim kimi çağırıyor), sonra sadece ilgili dosyaları aç. `graphify-out/graph.json` ve `graph.html` büyük dosyalar, okuma; bağlantı sorusu için `graphify explain "SınıfAdı"` veya `graphify path "A" "B"` komutunu kullan.
 - Kod değişikliğinden sonra grafiği tazelemek için: `graphify update .` (token harcamaz).

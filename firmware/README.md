@@ -17,7 +17,8 @@ Onur'un eski `src/` programı kaldırıldı; yaptığı her şey bu programda va
 
 ## Araçlar
 
-- `animasyon_aktar.py`: `motion/clips/` içindeki klipleri `animasyon_oynatma/include/animasyonlar.h` dosyasına çevirir. Klip ekleyince/değiştirince çalıştır: `python firmware/animasyon_aktar.py`
+- `animasyon_oynatma/klipleri_hazirla.py`: PlatformIO her derlemede `motion/clips/` içindeki klipleri kendiliğinden `include/gomulu_klipler.h` dosyasına gömer (elle çalıştırmaya gerek yok). Klip adı: Türkçe harfler ASCII olur, küçük harf (`derın_uyku.json` → `derin_uyku`), bilgisayardaki `contracts.clip_id()` ile aynı.
+- `animasyon_aktar.py`: ESKİ, artık kullanılmıyor (yerini `klipleri_hazirla.py` aldı).
 - `demo.py`: Wokwi açıkken karta sırayla komut gönderip cevapları gösterir: `python firmware/demo.py`
 
 ## Wokwi'de çalıştırma
