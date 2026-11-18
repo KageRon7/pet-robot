@@ -81,14 +81,14 @@ def _claude_beynini_al():
 
 # Bağlamı seçili beyne gönderir ve kararı döner.
 async def _beyne_gonder(baglam: BrainContext):
-    from brain.kurallar import decide
+    from brain.kurallar import karar_ver
 
     print(f"[BEYİN-SORU] gönderildi ({len(baglam.recent_events)} son olay)")
     claude = _claude_beynini_al()
     if claude is not None:
         return await claude.karar_ver(baglam)
     # decide senkron bir fonksiyon; ayrı thread'de çalıştırıyoruz ki router donmasın.
-    return await asyncio.to_thread(decide, baglam)
+    return await asyncio.to_thread(karar_ver, baglam)
 
 
 async def beyne_sor(baglam: BrainContext):
@@ -100,3 +100,31 @@ async def beyne_sor(baglam: BrainContext):
     except Exception as hata:
         print(f"[BEYİN-SORU] HATA: {hata!r}, refleksle devam")
     return None
+async def tik_sor(baglam: BrainContext):
+    """Davranış beynine tik gönderir (~1 sn'de bir). None = yapacak bir şey yok. Asla hata fırlatmaz.
+
+    Claude beyni seçili olsa da tik doğrudan davranış beynine gider (sıkılma, uyku, ilgi isteme).
+    """
+    try:
+        from brain.kurallar import tik
+
+        return await asyncio.wait_for(asyncio.to_thread(tik, baglam), timeout=BEYIN_ZAMAN_ASIMI_S)
+    except asyncio.TimeoutError:
+        print("[BEYİN-TİK] cevap gelmedi (zaman aşımı)")
+    except Exception as hata:
+        print(f"[BEYİN-TİK] HATA: {hata!r}")
+    return None
+
+
+def beyin_basamagi() -> str | None:
+    """Davranış beyninin şu anki basamağı: 'dinlenme', 'ilgilenme', 'sikilma', 'uyku', 'kose'.
+
+    Kafa takibi bunu sorar. Beyin henüz yüklenmediyse ya da hata olursa None döner.
+    Not: davranis._beyin iç değişken; beyin ekibi ileride basamak() diye bir fonksiyon açarsa buradan ona geçilir.
+    """
+    try:
+        from brain import davranis
+
+        return davranis._beyin.durum.basamak
+    except Exception:
+        return None

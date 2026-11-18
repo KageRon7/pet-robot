@@ -7,16 +7,17 @@ gerçek robota mı konuştuğunu bilmez. Her HAL'da şunlar var:
     await duygu_oynat(duygu, ...)   -> klibi oynatır, hemen döner
 
 KonsolHAL: pencere yok, sadece ekrana yazar.
-SimulatorHAL: motion/simulator.py'deki KediKontrolcusu'nu kullanır (yüz + motorlar).
+SimulatorHAL: motion/simulator.py'deki KediKontrolcusu'nu kullanır (yüz + motorlar). kafa_gonder ile kafa takibi de yapar.
 ESP32HAL: seri port (rfc2217, Wokwi) üzerinden C2 "anim" komutu gönderir.
 """
-
+import asyncio
 import atexit
 import queue
 import re
 import threading
 import time
 from pathlib import Path
+from contracts import clip_id
 
 KOK = Path(__file__).resolve().parent.parent
 KLIP_KLASORU = KOK / "motion" / "clips"
@@ -26,42 +27,96 @@ VARSAYILAN_KLIPLER = {"idle", "happy", "playful", "sad", "sleepy", "smile", "sta
 
 class KonsolHAL:
     def __init__(self) -> None:
-        self._adlar = {yol.stem for yol in KLIP_KLASORU.glob("*.json")}
+        self._adlar = {clip_id(yol.stem) for yol in KLIP_KLASORU.glob("*.json")}
 
     def bilinen(self, duygu: str) -> bool:
         return duygu in self._adlar
+
+    def klip_adlari(self) -> set[str]:
+        return set(self._adlar)
 
     async def duygu_oynat(self, duygu: str, kaynak: str, sure_s: float) -> None:
         print(f"[HAL] duygu={duygu} kaynak={kaynak}")
 
 
 class SimulatorHAL:
-    """Tkinter ana thread'de çalışır; asyncio başka thread'den buraya komut bırakır."""
+    """Tkinter ana thread'de çalışır; asyncio başka thread'den buraya komut bırakır.
 
-    def __init__(self, kontrolcu, pencere) -> None:
+    Kuyruğa iki tür iş gelir:
+      - str: klip adı -> klibi oynatır (kafa hareketini keser)
+      - (pan, tilt, ms): kafa_gonder -> kafayı ms içinde yumuşakça çevirir
+    """
+
+    def __init__(self, kontrolcu, pencere, simulator) -> None:
         self._kontrolcu = kontrolcu
         self._pencere = pencere
+        self._simulator = simulator  # motor çubukları (head_pan / head_tilt buradan okunur)
+        # klip kimliği (head_explosion_buum) -> simülatörün kullandığı dosya adı (Head_Explosion(BuUM))
+        self._adlar = {clip_id(ad): ad for ad in kontrolcu.klipler}
         self._kuyruk: queue.Queue = queue.Queue()
+        # Süren kafa hareketi: (başlangıç pan, başlangıç tilt, hedef pan, hedef tilt, başlangıç anı, ms)
+        self._kafa_hareketi: tuple[float, float, float, float, float, int] | None = None
         self._bosalt()
 
     def _bosalt(self) -> None:
-        # Tkinter thread'inde 20 ms'de bir kuyruğa bakar ve komutları uygular.
+        # Tkinter thread'inde 20 ms'de bir kuyruğa bakar, komutları uygular, kafa hareketini bir kare ilerletir.
         try:
             while True:
-                duygu = self._kuyruk.get_nowait()
+                is_ = self._kuyruk.get_nowait()
                 try:
-                    self._kontrolcu.duygu_cagir(duygu)
+                    if isinstance(is_, tuple):
+                        self._kafa_baslat(*is_)
+                    else:
+                        self._kafa_hareketi = None  # yeni klip kafa hareketini keser
+                        self._kontrolcu.duygu_cagir(self._adlar.get(is_, is_))
                 except Exception as hata:
                     print(f"[HAL] HATA: {hata!r}")
         except queue.Empty:
             pass
+        try:
+            self._kafa_adim()
+        except Exception as hata:
+            print(f"[HAL] kafa hareketi HATA: {hata!r}")
+            self._kafa_hareketi = None
         self._pencere.after(20, self._bosalt)
 
     def bilinen(self, duygu: str) -> bool:
-        return self._kontrolcu.klip_bul(duygu) is not None
+        return duygu in self._adlar or self._kontrolcu.klip_bul(duygu) is not None
+
+    def klip_adlari(self) -> set[str]:
+        return set(self._adlar)
 
     async def duygu_oynat(self, duygu: str, kaynak: str, sure_s: float) -> None:
         self._kuyruk.put(duygu)
+
+    def kafa_gonder(self, pan: float, tilt: float, ms: int = 80) -> None:
+        """Kafayı (head_pan, head_tilt derece, 0 = orta) ms içinde çevirir. ESP32HAL.kafa_gonder ile aynı imza.
+
+        Başka thread'den çağrılabilir; iş kuyruğa bırakılır, asyncio bloklanmaz.
+        """
+        self._kuyruk.put((float(pan), float(tilt), max(0, int(ms))))
+
+    def _kafa_baslat(self, pan: float, tilt: float, ms: int) -> None:
+        # Tk thread'inde: çalan klibi durdurur (idle döngüsü kafayı geri çekmesin), hareketi başlatır.
+        self._kontrolcu.oynatici.durdur()
+        poz = self._simulator.tum_degerler()
+        self._kafa_hareketi = (poz["head_pan"], poz["head_tilt"], pan, tilt, time.monotonic(), ms)
+
+    def _kafa_adim(self) -> None:
+        # Kafa hareketini bir kare ilerletir; çubuklar kayar, yüz yeni açıyla yeniden çizilir.
+        if self._kafa_hareketi is None:
+            return
+        pan0, tilt0, pan1, tilt1, baslangic, ms = self._kafa_hareketi
+        k = 1.0 if ms <= 0 else min(1.0, (time.monotonic() - baslangic) * 1000.0 / ms)
+        k = k * k * (3 - 2 * k)  # yumuşak başla, yumuşak dur
+        poz = self._simulator.tum_degerler()
+        poz["head_pan"] = pan0 + (pan1 - pan0) * k
+        poz["head_tilt"] = tilt0 + (tilt1 - tilt0) * k
+        oynatici = self._kontrolcu.oynatici
+        # _son_yuz: ekranda en son gösterilen yüz (motion/simulator.py). Yüz aynı kalır, sadece kafa döner.
+        oynatici.durus_goster(poz, oynatici._son_yuz)
+        if k >= 1.0:
+            self._kafa_hareketi = None
 
 
 class ESP32HAL:
@@ -109,6 +164,29 @@ class ESP32HAL:
     def bilinen(self, duygu: str) -> bool:
         return duygu in self._klipler
 
+    def klip_adlari(self) -> set[str]:
+        return set(self._klipler)
+
+    async def baglanti_bekle(self, sure_s: float = 5.0) -> bool:
+        """Seri bağlantı kurulana kadar bekler (açılış klibi komutu kaybolmasın diye)."""
+        bitis = time.monotonic() + sure_s
+        while time.monotonic() < bitis:
+            if self._port is not None:
+                return True
+            await asyncio.sleep(0.1)
+        return self._port is not None
+
+    # Kafa takibinde gövde ortada, kulaklar nötr durur (firmware'in nötr açılarıyla aynı).
+    KAFA_GOVDE_DERECE = 90
+    KAFA_KULAK_DERECE = (132, 48)
+
+    def kafa_gonder(self, pan: float, tilt: float, ms: int = 80) -> None:
+        """Kafayı (head_pan, head_tilt derece, 0 = orta) çevirir. move komutu kuyruğa bırakılır, asyncio bloklanmaz."""
+        pan_deg = int(round(min(180, max(0, 90 + pan))))
+        tilt_deg = int(round(min(135, max(80, 90 + tilt))))  # firmware sınırı 80–135
+        sol, sag = self.KAFA_KULAK_DERECE
+        self.komut_gonder("move", deg=[self.KAFA_GOVDE_DERECE, pan_deg, tilt_deg, sol, sag], ms=int(ms))
+    
     def komut_gonder(self, komut: str, **alanlar) -> None:
         """Komutu kuyruğa bırakır ve hemen döner (ileride move için de bu kullanılacak)."""
         try:
@@ -307,4 +385,4 @@ def simulator_penceresi_kur():
     kontrolcu = KediKontrolcusu(simulator, yuz_ekrani, klipler)
     KlipPaneli(sol, kontrolcu)
     kontrolcu.baslat()
-    return kok, SimulatorHAL(kontrolcu, kok)
+    return kok, SimulatorHAL(kontrolcu, kok,simulator)
