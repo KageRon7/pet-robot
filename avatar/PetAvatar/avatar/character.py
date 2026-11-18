@@ -12,7 +12,7 @@ from avatar.body_renderer import BodyRenderer
 from integration.robot_koprusu import PetRobotKoprusu
 from motion.klip import Enterpolator
 
-KARAKTER_OLCEGI = 0.40
+KARAKTER_OLCEGI = 0.20
 
 
 class KediKarakteri(QWidget):
@@ -64,7 +64,8 @@ class KediKarakteri(QWidget):
         self.yumusak_bakis_x = 0.0
         self.yumusak_bakis_y = 0.0
 
-        self.aktif_klip = self.kopru.klip_getir("idle")
+        # Başlangıçta idle1 çalışsın
+        self.aktif_klip = self.kopru.klip_getir("idle1")
 
     def mediapipe_bakis_guncelle(self, lx: float, ly: float):
         """Kaan'ın kamerasından gelen bakış koordinatlarını kaydeder."""
@@ -78,7 +79,8 @@ class KediKarakteri(QWidget):
             self.aktif_klip = yeni_klip
             self.klip_baslangic_zamani = self.son_zaman
 
-            if duygu_adi == "sleepy":
+            # Uyku kontrolü için sleepy1'i kontrol et
+            if duygu_adi == "sleepy1":
                 self.hareket_durumu = "uyuyor"
             else:
                 if self.hareket_durumu == "uyuyor":
@@ -123,10 +125,10 @@ class KediKarakteri(QWidget):
 
         if self.hareket_durumu == "uyuyor":
             uyandir_aksiyon = menu.addAction("Uyandır")
-            uyandir_aksiyon.triggered.connect(lambda: self.duygu_degistir("idle"))
+            uyandir_aksiyon.triggered.connect(lambda: self.duygu_degistir("idle1"))
         else:
             uyut_aksiyon = menu.addAction("Uyut (Zzz)")
-            uyut_aksiyon.triggered.connect(lambda: self.duygu_degistir("sleepy"))
+            uyut_aksiyon.triggered.connect(lambda: self.duygu_degistir("sleepy1"))
 
         yuru_aksiyon = menu.addAction("Yürüyüşe Çıkar")
         yuru_aksiyon.triggered.connect(self._yuruyuse_cikar)
@@ -141,7 +143,8 @@ class KediKarakteri(QWidget):
     def _yuruyuse_cikar(self):
         self.hareket_durumu = "yuruyor"
         self.yurume_yonu = random.choice([-1, 1])
-        self.aktif_klip = self.kopru.klip_getir("happy") or self.kopru.klip_getir("idle")
+        # Yürüyüş için direkt walk1 klibini kullanıyoruz
+        self.aktif_klip = self.kopru.klip_getir("walk1") 
         self.klip_baslangic_zamani = self.son_zaman
         self.sonraki_karar_zamani = self.son_zaman + 5.0
 
@@ -153,22 +156,21 @@ class KediKarakteri(QWidget):
 
         if event.button() == Qt.MouseButton.LeftButton:
             if self.hareket_durumu != "uyuyor":
-                self.duygu_degistir("sleepy")
+                # Sol tıkla sleepy1 ile uyut
+                self.duygu_degistir("sleepy1")
             else:
-                self.duygu_degistir("idle")
+                # Sol tıkla idle1 ile uyandır
+                self.duygu_degistir("idle1")
                 self.sonraki_karar_zamani = self.son_zaman + 2.0
             event.accept()
 
     def _hedef_bakisi_hesapla(self, t: float) -> tuple[float, float]:
-        """Öncelik sırasına göre (MediaPipe -> Fare İmleci -> Nötr) hedef bakışı belirler."""
         if self.hareket_durumu == "uyuyor":
             return 0.0, 0.0
 
-        # 1. Öncelik: Son 3 saniye içinde Kaan'ın MediaPipe modülünden veri geldiyse onu kullan
         if (t - self.son_mediapipe_zamani) <= 3.0:
             return self.mp_hedef_x, self.mp_hedef_y
 
-        # 2. Öncelik: Yürümüyorsa ve fare takibi açıksa imleci takip et
         if self.fare_takibi_aktif and self.hareket_durumu == "bekliyor":
             imlec_konumu = QCursor.pos()
             yuz_merkezi_yerel = QPoint(self.yuz.width() // 2, self.yuz.y() + self.yuz.height() // 2)
@@ -177,12 +179,10 @@ class KediKarakteri(QWidget):
             fark_x = imlec_konumu.x() - yuz_merkezi_ekran.x()
             fark_y = imlec_konumu.y() - yuz_merkezi_ekran.y()
 
-            # 350 piksellik yarıçapı [-1.0, 1.0] aralığına normalize et
             hedef_x = max(-1.0, min(1.0, fark_x / 350.0))
             hedef_y = max(-1.0, min(1.0, fark_y / 350.0))
             return hedef_x, hedef_y
 
-        # 3. Öncelik: Yürüyorsa gittiği yöne baksın
         if self.hareket_durumu == "yuruyor":
             return 0.7 * self.yurume_yonu, 0.0
 
@@ -193,18 +193,18 @@ class KediKarakteri(QWidget):
         if not self.aktif_klip:
             return
 
-        # Otonom karar mekanizması (MediaPipe aktif değilken çalışır)
         mediapipe_aktif = (t - self.son_mediapipe_zamani) <= 3.0
-        if self.hareket_durumu != "uyuyor" and not mediapipe_aktif and t >= self.sonraki_karar_zamani:
-            secim = random.choice(["bekliyor", "bekliyor", "yuruyor"])
+        if self.hareket_durumu != "uyuyor" and self.hareket_durumu != "evde" and not mediapipe_aktif and t >= self.sonraki_karar_zamani:
+            secim = random.choice(["bekliyor", "bekliyor", "yuruyor", "oturuyor"])
             self.hareket_durumu = secim
 
             if secim == "yuruyor":
                 self.yurume_yonu = random.choice([-1, 1])
-                klip_adi = random.choice(["idle", "happy", "playful"])
-                self.aktif_klip = self.kopru.klip_getir(klip_adi)
+                self.aktif_klip = self.kopru.klip_getir("walk1")
+            elif secim == "oturuyor":
+                self.aktif_klip = self.kopru.klip_getir("sit1")
             else:
-                self.aktif_klip = self.kopru.klip_getir("idle")
+                self.aktif_klip = self.kopru.klip_getir("idle1")
 
             self.klip_baslangic_zamani = t
             self.sonraki_karar_zamani = t + random.uniform(4.0, 7.0)
@@ -221,9 +221,7 @@ class KediKarakteri(QWidget):
         guncel_poz = Enterpolator.ornekle(self.aktif_klip, t_ms)
         tum_degerler = {**guncel_yuz, **guncel_poz}
 
-        # --- GÖZ VE KAFA TAKİBİ UYGULAMASI ---
         hedef_x, hedef_y = self._hedef_bakisi_hesapla(t)
-        # Yumuşak geçiş (Lerp) ile gözlerin ve kafanın doğal süzülmesini sağla
         self.yumusak_bakis_x += (hedef_x - self.yumusak_bakis_x) * 0.15
         self.yumusak_bakis_y += (hedef_y - self.yumusak_bakis_y) * 0.15
 
@@ -240,7 +238,10 @@ class KediKarakteri(QWidget):
         nefes_etkisi = math.sin(t * 3) * 5
         yurume_sekmesi = abs(math.sin(t * 10)) * 3 if self.hareket_durumu == "yuruyor" else 0.0
 
-        y_kayma = int((head_tilt * 1.5) + nefes_etkisi + yurume_sekmesi)
+        # Kaymayı ölçekten bağımsız hesapla, boyundan kopmaması için sınırla ve ölçekle çarp
+        ham_kayma = (head_tilt * 0.5) + nefes_etkisi + yurume_sekmesi
+        ham_kayma = max(-10.0, min(15.0, ham_kayma))
+        y_kayma = round(ham_kayma * KARAKTER_OLCEGI)
 
         if self.hareket_durumu == "uyuyor":
             baslangic_y = round(65 * KARAKTER_OLCEGI)
@@ -249,7 +250,7 @@ class KediKarakteri(QWidget):
 
         self.yuz.move(0, baslangic_y - y_kayma)
 
-        telafi_edilmis_esneme = y_kayma / KARAKTER_OLCEGI
+        telafi_edilmis_esneme = ham_kayma
 
         self.govde.durum_guncelle({
             "nefes_esnemesi": telafi_edilmis_esneme,
