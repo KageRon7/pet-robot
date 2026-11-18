@@ -104,11 +104,20 @@ class SerialReply(ContractModel):
         return self
 
 
-# Klip dosya adını klibin kalıcı kimliğine çevirir (B2 "clip" alanı bu kimliği kullanır).
-# Kural ESP32 aktarıcısıyla (firmware/animasyon_aktar.py) aynıdır: harf, rakam ve _ dışındaki
-# her şey _ olur, sonra küçük harfe çevrilir. Örnek: "Head_Explosion(BuUM)" -> "head_explosion_buum".
+# Türkçe harfleri ASCII karşılığına çeviren tablo (ESP32 ile aynı: ı -> i, ç -> c ...).
+TR_ASCII = str.maketrans({
+    "ç": "c", "Ç": "c", "ğ": "g", "Ğ": "g", "ı": "i", "İ": "i",
+    "ö": "o", "Ö": "o", "ş": "s", "Ş": "s", "ü": "u", "Ü": "u",
+})
+
+
+# Klip dosya adını klibin kalıcı kimliğine çevirir (B2 "clip" alanı ve C2 "anim" adı bu kimliği kullanır).
+# Kural ESP32'deki klip gömücüyle (firmware/animasyon_oynatma/klipleri_hazirla.py) aynıdır:
+# önce Türkçe harfler ASCII olur (ı -> i, ç -> c), sonra harf, rakam ve _ dışındaki her şey _ olur
+# ve hepsi küçük harfe çevrilir. Örnek: "derın_uyku" -> "derin_uyku", "iç_çekme" -> "ic_cekme".
 def clip_id(ad: str) -> str:
-    temiz = re.sub(r"[^A-Za-z0-9_]", "_", ad.removesuffix(".json"))
+    temiz = ad.removesuffix(".json").translate(TR_ASCII)
+    temiz = re.sub(r"[^A-Za-z0-9_]", "_", temiz)
     temiz = re.sub(r"_+", "_", temiz).strip("_")
     if not temiz or temiz[0].isdigit():
         temiz = "klip_" + temiz

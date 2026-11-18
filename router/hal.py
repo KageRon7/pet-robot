@@ -20,7 +20,6 @@ from pathlib import Path
 
 KOK = Path(__file__).resolve().parent.parent
 KLIP_KLASORU = KOK / "motion" / "clips"
-FIRMWARE_KLIPLERI = KOK / "firmware" / "animasyon_oynatma" / "include" / "animasyonlar.h"
 VARSAYILAN_KLIPLER = {"idle", "happy", "playful", "sad", "sleepy", "smile", "startled", "tsundere", "curious"}
 
 
@@ -147,10 +146,17 @@ class ESP32HAL:
 
     @staticmethod
     def _firmware_kliplerini_oku() -> set[str]:
-        # animasyonlar.h içindeki {"idle", IDLE_JSON} satırlarından klip adlarını okur.
+        # ESP32 derlenirken motion/clips içindeki her klibi adıyla karta gömer
+        # (firmware/animasyon_oynatma/klipleri_hazirla.py). Biz de aynı klasörden aynı adları çıkarırız.
+        # Kart, adı (Türkçe harfler çevrildikten sonra) sadece a-z, 0-9 ve _ olan dosyaları alır.
         try:
-            metin = FIRMWARE_KLIPLERI.read_text(encoding="utf-8")
-            adlar = set(re.findall(r'\{"(\w+)",\s*\w+_JSON\}', metin))
+            from contracts.motion import TR_ASCII, clip_id
+
+            adlar = set()
+            for yol in KLIP_KLASORU.glob("*.json"):
+                ad = clip_id(yol.stem)
+                if ad == yol.stem.translate(TR_ASCII).lower():
+                    adlar.add(ad)
             if adlar:
                 return adlar
         except OSError:

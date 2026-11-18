@@ -147,7 +147,7 @@ def test_decision_clip_optional():
     assert karar.emotion is Emotion.PLAYFUL and karar.clip == "hapsirma"
 
 
-# Klip kimliği ESP32 aktarıcısıyla aynı kuralla üretilmeli.
+# Klip kimliği ESP32'nin klip gömücüsüyle aynı kuralla üretilmeli.
 @pytest.mark.parametrize(
     "ad, beklenen",
     [
@@ -156,6 +156,11 @@ def test_decision_clip_optional():
         ("Head_Explosion(BuUM)", "head_explosion_buum"),
         ("Im_so_boored", "im_so_boored"),
         ("2kafa", "klip_2kafa"),
+        # Türkçe harfler ESP32'deki gibi ASCII olur (alt çizgi değil)
+        ("derın_uyku", "derin_uyku"),
+        ("iç_çekme", "ic_cekme"),
+        ("Head_Explosıon", "head_explosion"),
+        ("ırkılerek_uyanma", "irkilerek_uyanma"),
     ],
 )
 def test_clip_id(ad, beklenen):
