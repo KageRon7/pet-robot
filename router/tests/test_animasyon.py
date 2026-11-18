@@ -4,6 +4,7 @@ Nasıl çalıştırılır (ana klasörden): python -m unittest router.tests.test
 """
 
 import asyncio
+import os
 import unittest
 
 from router import animasyon
@@ -23,8 +24,14 @@ class SahteHAL:
     async def duygu_oynat(self, ad, kaynak, sure_s):
         self.oynanan.append(ad)
 
-
 class AnimasyonTestleri(unittest.TestCase):
+    def setUp(self):
+        # Açılış klibi döneme göre seçiliyor; testler saate bağlı olmasın diye hep gündüz sayılır.
+        os.environ["KEDI_DONEM"] = "gunduz"
+
+    def tearDown(self):
+        os.environ.pop("KEDI_DONEM", None)
+
     def kur(self, adlar):
         hal = SahteHAL(adlar)
         animasyon.hal_ayarla(hal)
