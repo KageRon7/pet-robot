@@ -1,10 +1,11 @@
-
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <ESP32Servo.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_ILI9341.h>
-#include "animasyonlar.h"
+#include "animasyon_tanimlari.h"
+#include "gomulu_klipler.h"
+// JSON dosyaları (motion/clips) derleme sırasında karta gömülür
 
 // Test için 1 yap: seri monitöre fps yazar (gerçek bağlantıda 0 kalsın,
 // yoksa Onur'un JSON okumasını bozar)
@@ -34,6 +35,30 @@ const unsigned long UPDATE_INTERVAL = 10;
 
 // Klip değişirken yüz ve servoların eski halden yeni hale geçiş süresi
 const unsigned long GECIS_MS = 250;
+
+// --- NEFES VE GÖZ KIRPMA AYARLARI (buradan değiştir) ---
+const float NORMAL_BPM = 14;          // normal nefes hızı (dakikada)
+const float UYKU_BPM = 8;             // uyurken nefes hızı
+const float NEFES_SERVO_DERECE = 1.5; // baş nefesle kaç derece oynasın
+const int NEFES_PIKSEL = 3;           // yüz nefesle kaç piksel oynasın
+const unsigned long KIRPMA_MS = 180;  // bir göz kırpmanın süresi
+const unsigned long KIRPMA_MIN = 2000;
+const unsigned long KIRPMA_MAX = 6000;
+const unsigned long UYKU_SURE_MS = 3000; // mesaj gelmezse uykuya dalma süresi
+
+float nefesBpm = NORMAL_BPM;
+float nefesFaz = 0;
+float nefesDeger = 0; // -1 ile +1 arası
+int nefesPx = 0;
+float klipBpm = 0; // klipte breath_bpm varsa
+unsigned long sonNefesZamani = 0;
+unsigned long sonNefesServo = 0;
+bool kirpiyor = false;
+float kirpmaDeger = 0;
+unsigned long kirpmaBaslangic = 0;
+unsigned long sonrakiKirpma = 0;
+int sleepyKlipNo = -1;
+int aktifKlipNo = -1;
 
 Servo servos[NUM_SERVOS];
 float startVal[NUM_SERVOS];
@@ -82,7 +107,7 @@ unsigned long fpsZaman = 0;
 uint16_t cZemin, cCizgi, cIris, cPembe, cGozyasi, cBeyaz, cKirmizi;
 
 // --- KLİP DEĞİŞKENLERİ ---
-const int MAX_KEY = 24;
+const int MAX_KEY = 64;
 Anahtar keys[MAX_KEY];
 
 int keySayisi = 0;
@@ -127,6 +152,12 @@ const float agizYari[AGIZ_SEKIL] = {40, 50, 50, 50, 50, 30};
 
 void servoYaz(int i, float aci)
 {
+  // baş eğimi (servo 2) nefesle çok hafif oynar
+  if (i == 2)
+    aci += nefesDeger * NEFES_SERVO_DERECE;
+
+  aci = constrain(aci, (float)minAci[i], (float)maxAci[i]);
+
   int us = 500 + (int)(aci * (2400 - 500) / 180.0f);
 
   if (us == sonUs[i])
@@ -196,6 +227,69 @@ void servoGuncelle()
                     (targetVal[i] - startVal[i]) * t;
 
     servoYaz(i, currentVal[i]);
+  }
+}
+
+// =========================================================================
+// NEFES VE GÖZ KIRPMA KATMANI
+// Seri porttan bağımsız, sadece millis() ile çalışır.
+// Klip oynarken, klipler arasında ve uykuda hep çalışır.
+// =========================================================================
+
+void nefesGuncelle()
+{
+  unsigned long now = millis();
+
+  float dt = (now - sonNefesZamani) / 1000.0f;
+  sonNefesZamani = now;
+  if (dt > 0.1f)
+    dt = 0.1f;
+
+  // hedef hız: klipte breath_bpm varsa o, yoksa uyku/normal
+  float hedef = NORMAL_BPM;
+  if (klipBpm > 0)
+    hedef = klipBpm;
+  else if (aktifKlipNo == sleepyKlipNo)
+    hedef = UYKU_BPM;
+
+  // hız yavaşça değişir, nefes sıçramaz
+  nefesBpm += (hedef - nefesBpm) * min(1.0f, dt * 1.5f);
+
+  nefesFaz += 6.2832f * (nefesBpm / 60.0f) * dt;
+  if (nefesFaz > 6.2832f)
+    nefesFaz -= 6.2832f;
+
+  nefesDeger = sinf(nefesFaz);
+
+  // göz kırpma
+  if (!kirpiyor && now >= sonrakiKirpma)
+  {
+    kirpiyor = true;
+    kirpmaBaslangic = now;
+  }
+
+  if (kirpiyor)
+  {
+    unsigned long g = now - kirpmaBaslangic;
+
+    if (g >= KIRPMA_MS)
+    {
+      kirpiyor = false;
+      kirpmaDeger = 0;
+      sonrakiKirpma = now + random((long)KIRPMA_MIN, (long)KIRPMA_MAX + 1);
+    }
+    else
+    {
+      float u = (float)g / KIRPMA_MS;
+      kirpmaDeger = (u < 0.5f) ? u * 2 : (1 - u) * 2;
+    }
+  }
+
+  // servo hareket etmiyorken de baş nefes alsın
+  if (now - sonNefesServo >= 20)
+  {
+    sonNefesServo = now;
+    servoYaz(2, currentVal[2]);
   }
 }
 
@@ -331,6 +425,8 @@ bool klipYukle(const char *json)
 
   int n = 0;
 
+  klipBpm = 0;
+
   JsonArray ks = doc["keys"].as<JsonArray>();
 
   for (JsonObject k : ks)
@@ -344,6 +440,9 @@ bool klipYukle(const char *json)
     a.ease = easeNo(k["ease"] | "smooth");
 
     JsonObject f = k["face"];
+
+    if (n == 0)
+      klipBpm = f["breath_bpm"] | 0.0f; // ilk anahtardaki değer
 
     Yuz &y = a.yuz;
 
@@ -726,7 +825,7 @@ void kasCiz(int cx, int y, float aci, int icYon)
 void agizCiz()
 {
   int cx = 160;
-  int cy = 190;
+  int cy = 190 + nefesPx;
 
   for (int j = 0; j < AGIZ_N; j++)
   {
@@ -747,7 +846,7 @@ void agizCiz()
 
 void yuzCiz(const YuzR &y)
 {
-  int gozY = 100;
+  int gozY = 100 + nefesPx;
 
   int gozX[2] = {100, 220};
 
@@ -876,7 +975,8 @@ bool klipOynat(int no, bool poseOynasin = true)
 
   klipBaslangic = millis();
 
-  idleOynuyor = (no == idleKlipNo);
+  aktifKlipNo = no;
+  idleOynuyor = (no == idleKlipNo || no == sleepyKlipNo);
 
   kareCiziliyor = false;
   sonKareZamani = 0;
@@ -889,12 +989,63 @@ bool klipOynat(int no, bool poseOynasin = true)
 
   return true;
 }
+// Türkçe harf UTF-8'de 2 bayttır. Tanırsa ASCII karşılığını döner, yoksa 0.
+char turkceHarf(unsigned char c, unsigned char d)
+{
+  if (c == 0xC3)
+  {
+    if (d == 0xA7 || d == 0x87)
+      return 'c'; // ç Ç
+    if (d == 0xB6 || d == 0x96)
+      return 'o'; // ö Ö
+    if (d == 0xBC || d == 0x9C)
+      return 'u'; // ü Ü
+  }
+  else if (c == 0xC4)
+  {
+    if (d == 0x9F || d == 0x9E)
+      return 'g'; // ğ Ğ
+    if (d == 0xB1 || d == 0xB0)
+      return 'i'; // ı İ
+  }
+  else if (c == 0xC5)
+  {
+    if (d == 0x9F || d == 0x9E)
+      return 's'; // ş Ş
+  }
 
+  return 0;
+}
+
+// "Derın_Uyku" -> "derin_uyku" (Türkçe harfleri ASCII yapar, küçültür)
+void adiSadelestir(const char *kaynak, char *hedef, int hedefBoyut)
+{
+  int j = 0;
+
+  for (int i = 0; kaynak[i] != 0 && j < hedefBoyut - 1; i++)
+  {
+    unsigned char c = kaynak[i];
+
+    char yeni = turkceHarf(c, kaynak[i + 1]);
+
+    if (yeni != 0)
+      i++; // Türkçe harfin ikinci baytını atla
+    else
+      yeni = tolower(c);
+
+    hedef[j++] = yeni;
+  }
+
+  hedef[j] = 0;
+}
 bool klipAdiylaOynat(const char *ad)
 {
+  char temiz[40];
+  adiSadelestir(ad, temiz, sizeof(temiz));
+
   for (int i = 0; i < KLIP_SAYISI; i++)
   {
-    if (strcmp(klipler[i].ad, ad) == 0)
+    if (strcmp(klipler[i].ad, temiz) == 0)
     {
       return klipOynat(i);
     }
@@ -974,6 +1125,10 @@ void kareHazirla()
   {
     kareR = hedef;
   }
+
+  // göz kırpma ve nefes: hangi klip olursa olsun üstüne biner
+  kareR.kapali = max(kareR.kapali, kirpmaDeger);
+  nefesPx = (int)roundf(nefesDeger * NEFES_PIKSEL);
 
   agizHazirla();
 
@@ -1079,6 +1234,11 @@ void ekranBaslat()
     {
       idleKlipNo = i;
     }
+
+    if (strcmp(klipler[i].ad, "sleepy") == 0)
+    {
+      sleepyKlipNo = i;
+    }
   }
 
   if (idleKlipNo >= 0)
@@ -1126,6 +1286,10 @@ void setup()
 
   sonMesajZamani = millis();
 
+  randomSeed(esp_random());
+  sonNefesZamani = millis();
+  sonrakiKirpma = millis() + 3000;
+
   motorlariBaslat();
 
   ekranBaslat();
@@ -1137,6 +1301,8 @@ void setup()
 
 void loop()
 {
+  nefesGuncelle();
+
   servoGuncelle();
 
   servoPoseGuncelle();
@@ -1325,11 +1491,12 @@ void loop()
   }
 #endif
 
-  // 3 saniye boyunca ping gelmezse nötre dön
+  // mesaj gelmezse uykuya dal: servolar nötre, yüz sleepy, nefes devam
   if (sigortaDevredeMi &&
-      (millis() - sonMesajZamani > 3000))
+      (millis() - sonMesajZamani > UYKU_SURE_MS))
   {
-    poseAnimasyonuAktif = false;
+    if (sleepyKlipNo >= 0)
+      klipOynat(sleepyKlipNo, false);
 
     notrPozisyonaDon();
 
