@@ -3,85 +3,78 @@
 #include <ESP32Servo.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_ILI9341.h>
-#include "animasyon_tanimlari.h"
-#include "gomulu_klipler.h"
-// JSON dosyaları (motion/clips) derleme sırasında karta gömülür
+#include "animasyon_tanimlari.h" // Anahtar, Yuz, Poz yapıları
+#include "gomulu_klipler.h"      // Derleme sırasında gömülen JSON klipler
 
-// Test için 1 yap: seri monitöre fps yazar (gerçek bağlantıda 0 kalsın,
-// yoksa Onur'un JSON okumasını bozar)
+// 1 yapılırsa seri monitöre fps yazar. Gerçek bağlantıda 0 kalmalı,
+// aksi halde seri porttaki JSON haberleşmesi bozulur.
 #define FPS_YAZ 0
 
-// Ekran SPI hızı: 40 MHz
-const uint32_t SPI_HIZ = 40000000;
+const uint32_t SPI_HIZ = 40000000; // Ekran SPI hızı (40 MHz)
 
-// --- GÜVENLİK VE İLETİŞİM DEĞİŞKENLERİ ---
-unsigned long sonMesajZamani = 0;
-bool sigortaDevredeMi = false;
-String gelenSatir = "";
+// ---------------- Güvenlik ve iletişim ----------------
+unsigned long sonMesajZamani = 0; // Son geçerli komutun geldiği an
+bool sigortaDevredeMi = false;    // true: komut alındı, zaman aşımı izleniyor
+String gelenSatir = "";           // Seri porttan biriken ham mesaj
 
-// --- SERVO VE HAREKET DEĞİŞKENLERİ ---
+// ---------------- Servo ve hareket ----------------
 const int NUM_SERVOS = 5;
 const int pins[NUM_SERVOS] = {13, 12, 14, 27, 26};
 
-// Servonun gidebileceği fiziksel açı sınırları
+// Servo başına fiziksel açı sınırları (derece)
 const int minAci[NUM_SERVOS] = {45, 0, 80, 60, 30};
 const int maxAci[NUM_SERVOS] = {135, 180, 135, 150, 120};
 
-// Başlangıç/Nötr açıları
+// Nötr (başlangıç) açıları
 const int idleAci[NUM_SERVOS] = {90, 90, 90, 132, 48};
 
-const unsigned long IDLE_RETURN_MS = 800;
-const unsigned long UPDATE_INTERVAL = 10;
+const unsigned long IDLE_RETURN_MS = 800; // Nötre dönüş süresi
+const unsigned long UPDATE_INTERVAL = 10; // Servo güncelleme periyodu
+const unsigned long GECIS_MS = 250;       // Klipler arası yumuşak geçiş süresi
 
-// Klip değişirken yüz ve servoların eski halden yeni hale geçiş süresi
-const unsigned long GECIS_MS = 250;
+// ---------------- Nefes ve göz kırpma ayarları ----------------
+const float NORMAL_BPM = 14;             // Normal nefes hızı (dk başına)
+const float UYKU_BPM = 8;                // Uyku sırasındaki nefes hızı
+const float NEFES_SERVO_DERECE = 1.5;    // Nefesle baş eğiminin genliği (derece)
+const int NEFES_PIKSEL = 3;              // Nefesle yüzün genliği (piksel)
+const unsigned long KIRPMA_MS = 180;     // Tek göz kırpma süresi
+const unsigned long KIRPMA_MIN = 2000;   // İki kırpma arası en az süre
+const unsigned long KIRPMA_MAX = 6000;   // İki kırpma arası en fazla süre
+const unsigned long UYKU_SURE_MS = 3000; // Mesaj gelmezse uykuya dalma süresi
 
-// --- NEFES VE GÖZ KIRPMA AYARLARI (buradan değiştir) ---
-const float NORMAL_BPM = 14;          // normal nefes hızı (dakikada)
-const float UYKU_BPM = 8;             // uyurken nefes hızı
-const float NEFES_SERVO_DERECE = 1.5; // baş nefesle kaç derece oynasın
-const int NEFES_PIKSEL = 3;           // yüz nefesle kaç piksel oynasın
-const unsigned long KIRPMA_MS = 180;  // bir göz kırpmanın süresi
-const unsigned long KIRPMA_MIN = 2000;
-const unsigned long KIRPMA_MAX = 6000;
-const unsigned long UYKU_SURE_MS = 3000; // mesaj gelmezse uykuya dalma süresi
-
-float nefesBpm = NORMAL_BPM;
-float nefesFaz = 0;
-float nefesDeger = 0; // -1 ile +1 arası
-int nefesPx = 0;
-float klipBpm = 0; // klipte breath_bpm varsa
+float nefesBpm = NORMAL_BPM; // Anlık nefes hızı (hedefe yavaşça yaklaşır)
+float nefesFaz = 0;          // Sinüs fazı (0 - 2π)
+float nefesDeger = 0;        // Nefes çıktısı, -1 ile +1 arası
+int nefesPx = 0;             // Nefesin piksel karşılığı
+float klipBpm = 0;           // Klipte breath_bpm tanımlıysa değeri
 unsigned long sonNefesZamani = 0;
 unsigned long sonNefesServo = 0;
 bool kirpiyor = false;
-float kirpmaDeger = 0;
+float kirpmaDeger = 0; // 0 = göz açık, 1 = göz tam kapalı
 unsigned long kirpmaBaslangic = 0;
 unsigned long sonrakiKirpma = 0;
-int sleepyKlipNo = -1;
-int aktifKlipNo = -1;
+int sleepyKlipNo = -1; // "sleepy" klibinin indeksi
+int aktifKlipNo = -1;  // Çalan klibin indeksi
 
 Servo servos[NUM_SERVOS];
-float startVal[NUM_SERVOS];
-float targetVal[NUM_SERVOS];
-float currentVal[NUM_SERVOS];
+float startVal[NUM_SERVOS];   // Hareket başlangıç açıları
+float targetVal[NUM_SERVOS];  // Hareket hedef açıları
+float currentVal[NUM_SERVOS]; // Servoların anlık açıları
 
 unsigned long moveStart = 0;
 unsigned long moveDuration = 0;
-bool moving = false;
+bool moving = false; // Doğrusal servo hareketi sürüyor mu
 unsigned long lastUpdate = 0;
 
-// JSON servo animasyonu aktif mi?
-bool poseAnimasyonuAktif = false;
+bool poseAnimasyonuAktif = false; // Servolar klipteki pose'a göre mi sürülüyor
 unsigned long sonPoseGuncelleme = 0;
 
-// Klip geçişi için: klip başlarken servoların o anki açıları
-float gecisAcilar[NUM_SERVOS];
+float gecisAcilar[NUM_SERVOS]; // Klip başlarken servoların o anki açıları
 unsigned long gecisZamani = 0;
 
-// Son yazılan servo mikrosaniyesi (aynı değeri tekrar yazmamak için)
-int sonUs[NUM_SERVOS];
+int sonUs[NUM_SERVOS]; // Son yazılan darbe genişliği (tekrar yazmayı önler)
 
-// --- EKRAN DEĞİŞKENLERİ ---
+// ---------------- Ekran ----------------
 #define TFT_CS 5
 #define TFT_DC 2
 #define TFT_RST 4
@@ -90,24 +83,36 @@ Adafruit_ILI9341 tft(TFT_CS, TFT_DC, TFT_RST);
 
 const int EKRAN_W = 320;
 const int EKRAN_H = 240;
-const int SERIT_H = 60;
 
-GFXcanvas16 canvas(EKRAN_W, SERIT_H);
-int seritY = 0;
+// Ekran BLOK_W x BLOK_H piksellik bloklara bölünür.
+// Küçük blok = daha az gereksiz gönderim, ama blok başına daha fazla yük.
+// Değerler ekran boyutunu tam bölmelidir.
+const int BLOK_W = 40;
+const int BLOK_H = 40;
+static_assert(EKRAN_W % BLOK_W == 0, "BLOK_W ekran genisligini bolmeli");
+static_assert(EKRAN_H % BLOK_H == 0, "BLOK_H ekran yuksekligini bolmeli");
 
-// Her şeridin ekrana en son gönderilen içeriğinin özeti
-uint32_t seritOzet[EKRAN_H / SERIT_H];
+const int BLOK_SUTUN = EKRAN_W / BLOK_W;
+const int BLOK_SATIR = EKRAN_H / BLOK_H;
+const int BLOK_TOPLAM = BLOK_SUTUN * BLOK_SATIR;
 
-// fps ölçümü için sayaçlar
+GFXcanvas16 canvas(BLOK_W, BLOK_H); // Tek blok için bellek tamponu
+int blokNo = 0;                     // Sıradaki çizilecek blok
+int blokX = 0;                      // Aktif bloğun ekrandaki sol üst X
+int blokY = 0;                      // Aktif bloğun ekrandaki sol üst Y
+
+// Her bloğun son gönderilen içeriğinin özeti (değişmeyeni göndermemek için)
+uint32_t blokOzet[BLOK_TOPLAM];
+
+// fps ölçüm sayaçları
 unsigned long fpsSay = 0;
-unsigned long seritGonderilen = 0;
+unsigned long blokGonderilen = 0;
 unsigned long fpsZaman = 0;
 
-// Renkler
 uint16_t cZemin, cCizgi, cIris, cPembe, cGozyasi, cBeyaz, cKirmizi;
 
-// --- KLİP DEĞİŞKENLERİ ---
-const int MAX_KEY = 64;
+// ---------------- Klip ----------------
+const int MAX_KEY = 64; // Bir klipteki en fazla anahtar kare
 Anahtar keys[MAX_KEY];
 
 int keySayisi = 0;
@@ -115,49 +120,52 @@ unsigned long klipSuresi = 1;
 unsigned long klipBaslangic = 0;
 unsigned long sonKareZamani = 0;
 
-const unsigned long KARE_ARALIGI = 33;
+const unsigned long KARE_ARALIGI = 33; // ~30 fps
 
-bool kareCiziliyor = false;
+bool kareCiziliyor = false; // true: kare blok blok çiziliyor
 
 int idleKlipNo = -1;
-bool idleOynuyor = false;
+bool idleOynuyor = false; // Çalan klip döngüsel (idle/sleepy) mi
 
-// --- ÇİZİM İÇİN YUMUŞAK YÜZ DURUMU ---
-const int AGIZ_SEKIL = 6;
-const int AGIZ_N = 101;
+// ---------------- Yumuşak yüz durumu ----------------
+const int AGIZ_SEKIL = 6; // Ağız şekli sayısı
+const int AGIZ_N = 101;   // Ağız çizgisinin nokta sayısı
 
+// Ara değer hesabı için tüm yüz parametreleri float olarak tutulur
 struct YuzR
 {
-  float kapali;
+  float kapali; // Göz kapalılığı (0-1)
   float eye_open, eye_size, pupil, sparkle;
   float look_x, look_y;
   float brow_left, brow_right, brow_height;
   float mouth_open, tears;
   float blush, anger;
-  float mw[AGIZ_SEKIL];
+  float mw[AGIZ_SEKIL]; // Ağız şekillerinin ağırlıkları
 };
 
-YuzR kareR;
-YuzR gecisR;
+YuzR kareR;  // Ekrana çizilen güncel yüz
+YuzR gecisR; // Geçiş başındaki yüz
 bool ilkYukleme = true;
 
-float agizYv[AGIZ_N];
-float agizHW = 0;
+float agizYv[AGIZ_N]; // Ağız eğrisinin her noktadaki yüksekliği
+float agizHW = 0;     // Ağzın yarı genişliği
 
-const float agizYari[AGIZ_SEKIL] = {40, 50, 50, 50, 50, 30};
+const float agizYari[AGIZ_SEKIL] = {40, 50, 50, 50, 50, 30}; // Şekil başına yarı genişlik
 
 // =========================================================================
-// HAREKET VE MOTOR FONKSİYONLARI
+// Servo hareketi
 // =========================================================================
 
+// Açıyı sınırlayıp mikrosaniyeye çevirir ve servoya yazar
 void servoYaz(int i, float aci)
 {
-  // baş eğimi (servo 2) nefesle çok hafif oynar
+  // Baş eğimi (servo 2) nefesle hafifçe oynar
   if (i == 2)
     aci += nefesDeger * NEFES_SERVO_DERECE;
 
   aci = constrain(aci, (float)minAci[i], (float)maxAci[i]);
 
+  // 0-180 derece -> 500-2400 us
   int us = 500 + (int)(aci * (2400 - 500) / 180.0f);
 
   if (us == sonUs[i])
@@ -167,6 +175,7 @@ void servoYaz(int i, float aci)
   servos[i].writeMicroseconds(us);
 }
 
+// Mevcut açılardan hedef açılara ms sürede doğrusal hareket başlatır
 void hareketBaslat(const float target[], unsigned long ms)
 {
   for (int i = 0; i < NUM_SERVOS; i++)
@@ -180,6 +189,7 @@ void hareketBaslat(const float target[], unsigned long ms)
   moving = true;
 }
 
+// Zamanlayıcıları ayırır, servoları bağlar ve nötr konuma getirir
 void motorlariBaslat()
 {
   ESP32PWM::allocateTimer(0);
@@ -199,6 +209,7 @@ void motorlariBaslat()
   }
 }
 
+// hareketBaslat ile başlayan hareketi zamana göre ilerletir
 void servoGuncelle()
 {
   if (!moving)
@@ -211,6 +222,7 @@ void servoGuncelle()
 
   lastUpdate = now;
 
+  // t: hareketin ilerleme oranı (0-1)
   float t = (moveDuration == 0)
                 ? 1.0f
                 : (float)(now - moveStart) / moveDuration;
@@ -231,37 +243,38 @@ void servoGuncelle()
 }
 
 // =========================================================================
-// NEFES VE GÖZ KIRPMA KATMANI
-// Seri porttan bağımsız, sadece millis() ile çalışır.
-// Klip oynarken, klipler arasında ve uykuda hep çalışır.
+// Nefes ve göz kırpma katmanı
+// Seri porttan bağımsız, yalnızca millis() ile çalışır ve her durumda aktiftir.
 // =========================================================================
 
 void nefesGuncelle()
 {
   unsigned long now = millis();
 
+  // Geçen süre (sn); uzun duraksamalarda sıçrama olmasın diye sınırlı
   float dt = (now - sonNefesZamani) / 1000.0f;
   sonNefesZamani = now;
   if (dt > 0.1f)
     dt = 0.1f;
 
-  // hedef hız: klipte breath_bpm varsa o, yoksa uyku/normal
+  // Hedef hız: klipte breath_bpm varsa o, uykudaysa UYKU_BPM, yoksa normal
   float hedef = NORMAL_BPM;
   if (klipBpm > 0)
     hedef = klipBpm;
   else if (aktifKlipNo == sleepyKlipNo)
     hedef = UYKU_BPM;
 
-  // hız yavaşça değişir, nefes sıçramaz
+  // Hız hedefe yavaşça yaklaşır
   nefesBpm += (hedef - nefesBpm) * min(1.0f, dt * 1.5f);
 
+  // Faz ilerletilir (2π = 6.2832), çıktı sinüs dalgasıdır
   nefesFaz += 6.2832f * (nefesBpm / 60.0f) * dt;
   if (nefesFaz > 6.2832f)
     nefesFaz -= 6.2832f;
 
   nefesDeger = sinf(nefesFaz);
 
-  // göz kırpma
+  // Kırpma zamanı geldiyse göz kırpmayı başlat
   if (!kirpiyor && now >= sonrakiKirpma)
   {
     kirpiyor = true;
@@ -274,18 +287,20 @@ void nefesGuncelle()
 
     if (g >= KIRPMA_MS)
     {
+      // Kırpma bitti, sonraki kırpmayı rastgele bir süreye ayarla
       kirpiyor = false;
       kirpmaDeger = 0;
       sonrakiKirpma = now + random((long)KIRPMA_MIN, (long)KIRPMA_MAX + 1);
     }
     else
     {
+      // Üçgen dalga: ilk yarıda kapanır, ikinci yarıda açılır
       float u = (float)g / KIRPMA_MS;
       kirpmaDeger = (u < 0.5f) ? u * 2 : (1 - u) * 2;
     }
   }
 
-  // servo hareket etmiyorken de baş nefes alsın
+  // Servo hareketsizken de baş nefes alsın (20 ms'de bir yazılır)
   if (now - sonNefesServo >= 20)
   {
     sonNefesServo = now;
@@ -293,6 +308,7 @@ void nefesGuncelle()
   }
 }
 
+// Açıları sınırlara kırpıp ms sürede hedefe gider
 void hedefAcilaraGit(int hedefAcilar[5], int sure_ms)
 {
   float target[NUM_SERVOS];
@@ -308,6 +324,7 @@ void hedefAcilaraGit(int hedefAcilar[5], int sure_ms)
   hareketBaslat(target, sure_ms);
 }
 
+// Tüm servoları nötr açılara döndürür
 void notrPozisyonaDon()
 {
   float target[NUM_SERVOS];
@@ -321,43 +338,73 @@ void notrPozisyonaDon()
 }
 
 // =========================================================================
-// EKRAN VE YÜZ ANİMASYONU FONKSİYONLARI
+// Çizim yardımcıları
+// Koordinatlar ekran koordinatıdır; aktif bloğun sol üstü (blokX, blokY)
+// çıkarılarak tampona çizilir. Bloğun dışında kalan şekiller hiç çizilmez,
+// böylece aynı yüz her blok için tekrar çizilse de maliyet düşük kalır.
 // =========================================================================
+
+// Sınır kutusu aktif bloğun tamamen dışındaysa true döner (x1, y1 dahil)
+inline bool blokDisinda(int x0, int y0, int x1, int y1)
+{
+  return x1 < blokX || x0 >= blokX + BLOK_W ||
+         y1 < blokY || y0 >= blokY + BLOK_H;
+}
 
 void daireCiz(int x, int y, int r, uint16_t renk)
 {
-  canvas.fillCircle(x, y - seritY, r, renk);
+  if (blokDisinda(x - r, y - r, x + r, y + r))
+    return;
+
+  canvas.fillCircle(x - blokX, y - blokY, r, renk);
 }
 
 void cizgiCiz(int x0, int y0, int x1, int y1, uint16_t renk)
 {
-  canvas.drawLine(x0, y0 - seritY, x1, y1 - seritY, renk);
+  if (blokDisinda(min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1)))
+    return;
+
+  canvas.drawLine(x0 - blokX, y0 - blokY, x1 - blokX, y1 - blokY, renk);
 }
 
 void kutuCiz(int x, int y, int w, int h, uint16_t renk)
 {
-  canvas.fillRect(x, y - seritY, w, h, renk);
+  if (blokDisinda(x, y, x + w - 1, y + h - 1))
+    return;
+
+  canvas.fillRect(x - blokX, y - blokY, w, h, renk);
 }
 
 void yuvarlakKutuCiz(int x, int y, int w, int h, int r, uint16_t renk)
 {
-  canvas.fillRoundRect(x, y - seritY, w, h, r, renk);
+  if (blokDisinda(x, y, x + w - 1, y + h - 1))
+    return;
+
+  canvas.fillRoundRect(x - blokX, y - blokY, w, h, r, renk);
 }
 
 void yatayCiz(int x, int y, int w, uint16_t renk)
 {
-  canvas.drawFastHLine(x, y - seritY, w, renk);
+  if (blokDisinda(x, y, x + w - 1, y))
+    return;
+
+  canvas.drawFastHLine(x - blokX, y - blokY, w, renk);
 }
 
 void dikeyCiz(int x, int y, int h, uint16_t renk)
 {
-  canvas.drawFastVLine(x, y - seritY, h, renk);
+  if (blokDisinda(x, y, x, y + h - 1))
+    return;
+
+  canvas.drawFastVLine(x - blokX, y - blokY, h, renk);
 }
 
+// İki RGB565 rengi t oranında karıştırır (0 = a, 1 = b)
 uint16_t karistir(uint16_t a, uint16_t b, float t)
 {
   t = constrain(t, 0.0f, 1.0f);
 
+  // RGB565 kanallarını ayır (5-6-5 bit)
   int ar = (a >> 11) & 31;
   int ag = (a >> 5) & 63;
   int ab = a & 31;
@@ -373,6 +420,7 @@ uint16_t karistir(uint16_t a, uint16_t b, float t)
   return (r << 11) | (g << 5) | bl;
 }
 
+// JSON'daki ağız adını şekil numarasına çevirir (bilinmeyen = 0, düz)
 int agizNo(const char *s)
 {
   if (strcmp(s, "smile") == 0)
@@ -393,6 +441,7 @@ int agizNo(const char *s)
   return 0;
 }
 
+// JSON'daki ease adını numaraya çevirir (bilinmeyen = 0, smooth)
 int easeNo(const char *s)
 {
   if (strcmp(s, "stop") == 0)
@@ -411,9 +460,10 @@ int easeNo(const char *s)
 }
 
 // =========================================================================
-// JSON KLİP YÜKLEME
+// JSON klip yükleme
 // =========================================================================
 
+// JSON metnini ayrıştırıp keys[] dizisine doldurur; başarısızsa false döner
 bool klipYukle(const char *json)
 {
   JsonDocument doc;
@@ -441,8 +491,9 @@ bool klipYukle(const char *json)
 
     JsonObject f = k["face"];
 
+    // Nefes hızı yalnızca ilk anahtardan okunur
     if (n == 0)
-      klipBpm = f["breath_bpm"] | 0.0f; // ilk anahtardaki değer
+      klipBpm = f["breath_bpm"] | 0.0f;
 
     Yuz &y = a.yuz;
 
@@ -471,7 +522,7 @@ bool klipYukle(const char *json)
 
     JsonObject p = k["pose"].as<JsonObject>();
 
-    a.poseVar = !p.isNull();
+    a.poseVar = !p.isNull(); // Bu anahtarda pose tanımlı mı
 
     a.pose.body_yaw = p["body_yaw"] | 0.0f;
     a.pose.head_pan = p["head_pan"] | 0.0f;
@@ -488,6 +539,7 @@ bool klipYukle(const char *json)
 
   keySayisi = n;
 
+  // Klip süresi: duration_ms ile son anahtar zamanından büyük olan
   unsigned long sure = doc["duration_ms"] | 0;
 
   klipSuresi =
@@ -502,19 +554,23 @@ bool klipYukle(const char *json)
 }
 
 // =========================================================================
-// ANİMASYON HESAPLAMALARI
+// Ara değer (interpolasyon) hesapları
 // =========================================================================
 
+// a'dan b'ye doğrusal ara değer (u: 0-1)
 float ara(float a, float b, float u)
 {
   return a + (b - a) * u;
 }
 
+// u (0-1) değerine ease eğrisini uygular
 float easeUygula(int e, float u)
 {
+  // stop: başta hızlı, sonda yavaşlar
   if (e == 1)
     return 1 - (1 - u) * (1 - u);
 
+  // bounce: hedefe çarpıp zıplar
   if (e == 2)
   {
     if (u < 0.3636f)
@@ -537,19 +593,19 @@ float easeUygula(int e, float u)
     return 7.5625f * u * u + 0.984375f;
   }
 
+  // linear
   if (e == 3)
     return u;
 
+  // snap: anında hedefe atlar
   if (e == 4)
     return 1;
 
+  // varsayılan: smoothstep
   return u * u * (3 - 2 * u);
 }
 
-// =========================================================================
-// YÜZ ARA DEĞER HESAPLAMASI
-// =========================================================================
-
+// Yuz yapısını ara değer hesabına uygun YuzR'ye çevirir
 YuzR yuzdenR(const Yuz &y)
 {
   YuzR r;
@@ -574,6 +630,7 @@ YuzR yuzdenR(const Yuz &y)
   r.blush = y.blush ? 1.0f : 0.0f;
   r.anger = y.anger_mark ? 1.0f : 0.0f;
 
+  // Seçili ağız şeklinin ağırlığı 1, diğerleri 0
   for (int k = 0; k < AGIZ_SEKIL; k++)
     r.mw[k] = 0;
 
@@ -587,6 +644,7 @@ YuzR yuzdenR(const Yuz &y)
   return r;
 }
 
+// İki yüz durumu arasında u oranında ara değer üretir
 YuzR yuzRAra(const YuzR &a, const YuzR &b, float u)
 {
   YuzR r;
@@ -617,71 +675,7 @@ YuzR yuzRAra(const YuzR &a, const YuzR &b, float u)
   return r;
 }
 
-// =========================================================================
-// AĞIZ ŞEKİLLERİ
-// =========================================================================
-
-float agizYuksekligi(int sekil, float x, int derinlik)
-{
-  if (sekil == 1)
-    return derinlik / 2.0f - (x * x) * derinlik / 2500.0f;
-
-  if (sekil == 2)
-    return -derinlik / 2.0f + (x * x) * derinlik / 2500.0f;
-
-  if (sekil == 3)
-    return 8 * sinf(x * 0.15f);
-
-  if (sekil == 4)
-  {
-    float d = fmodf(x + 50, 20);
-    return fabsf(d - 10) - 5;
-  }
-
-  if (sekil == 5)
-  {
-    float lx = (x < 0) ? x + 15 : x - 15;
-    return 6 - (lx * lx * 12) / 225.0f;
-  }
-
-  return 0;
-}
-
-void agizHazirla()
-{
-  float hw = 0;
-
-  for (int k = 0; k < AGIZ_SEKIL; k++)
-    hw += kareR.mw[k] * agizYari[k];
-
-  agizHW = hw;
-
-  int derinlik =
-      10 + (int)(40 * constrain(kareR.mouth_open, 0.0f, 1.2f));
-
-  for (int j = 0; j < AGIZ_N; j++)
-  {
-    float xn = (j - AGIZ_N / 2) / (float)(AGIZ_N / 2);
-
-    float y = 0;
-
-    for (int k = 0; k < AGIZ_SEKIL; k++)
-    {
-      if (kareR.mw[k] > 0.001f)
-      {
-        y += kareR.mw[k] *
-             agizYuksekligi(k, xn * agizYari[k], derinlik);
-      }
-    }
-
-    agizYv[j] = y;
-  }
-}
-
-// =========================================================================
-// SERVO ARA DEĞER HESAPLAMASI
-// =========================================================================
-
+// İki pose arasında u oranında ara değer üretir
 Poz pozAra(const Poz &a, const Poz &b, float u)
 {
   Poz r;
@@ -697,7 +691,80 @@ Poz pozAra(const Poz &a, const Poz &b, float u)
 }
 
 // =========================================================================
-// JSON SERVO ANİMASYONU
+// Ağız şekilleri
+// =========================================================================
+
+// Verilen şeklin x konumundaki yüksekliğini döner (x: merkezden piksel)
+float agizYuksekligi(int sekil, float x, int derinlik)
+{
+  // smile: yukarı bakan parabol
+  if (sekil == 1)
+    return derinlik / 2.0f - (x * x) * derinlik / 2500.0f;
+
+  // frown: aşağı bakan parabol
+  if (sekil == 2)
+    return -derinlik / 2.0f + (x * x) * derinlik / 2500.0f;
+
+  // wavy: sinüs dalgası
+  if (sekil == 3)
+    return 8 * sinf(x * 0.15f);
+
+  // zigzag: üçgen dalga
+  if (sekil == 4)
+  {
+    float d = fmodf(x + 50, 20);
+    return fabsf(d - 10) - 5;
+  }
+
+  // y: iki küçük parabol (kedi ağzı)
+  if (sekil == 5)
+  {
+    float lx = (x < 0) ? x + 15 : x - 15;
+    return 6 - (lx * lx * 12) / 225.0f;
+  }
+
+  // flat
+  return 0;
+}
+
+// Şekil ağırlıklarına göre ağız eğrisini (agizYv) önceden hesaplar
+void agizHazirla()
+{
+  // Yarı genişlik: şekillerin genişliklerinin ağırlıklı ortalaması
+  float hw = 0;
+
+  for (int k = 0; k < AGIZ_SEKIL; k++)
+    hw += kareR.mw[k] * agizYari[k];
+
+  agizHW = hw;
+
+  // Ağız açıklığı arttıkça eğrinin derinliği artar
+  int derinlik =
+      10 + (int)(40 * constrain(kareR.mouth_open, 0.0f, 1.2f));
+
+  for (int j = 0; j < AGIZ_N; j++)
+  {
+    // xn: -1 ile +1 arası normalize konum
+    float xn = (j - AGIZ_N / 2) / (float)(AGIZ_N / 2);
+
+    float y = 0;
+
+    // Her şeklin yüksekliği ağırlığıyla toplanır
+    for (int k = 0; k < AGIZ_SEKIL; k++)
+    {
+      if (kareR.mw[k] > 0.001f)
+      {
+        y += kareR.mw[k] *
+             agizYuksekligi(k, xn * agizYari[k], derinlik);
+      }
+    }
+
+    agizYv[j] = y;
+  }
+}
+
+// =========================================================================
+// Klipteki pose'a göre servo sürme
 // =========================================================================
 
 void servoPoseGuncelle()
@@ -712,6 +779,7 @@ void servoPoseGuncelle()
 
   sonPoseGuncelleme = now;
 
+  // Klip içindeki zaman; idle/sleepy klipleri döngüde çalar
   unsigned long t = now - klipBaslangic;
 
   if (idleOynuyor && klipSuresi > 0)
@@ -723,14 +791,15 @@ void servoPoseGuncelle()
 
   if (t <= keys[0].t)
   {
-    p = keys[0].pose;
+    p = keys[0].pose; // İlk anahtardan önce
   }
   else if (t >= keys[keySayisi - 1].t)
   {
-    p = keys[keySayisi - 1].pose;
+    p = keys[keySayisi - 1].pose; // Son anahtardan sonra
   }
   else
   {
+    // t'yi kapsayan anahtar çiftini bul
     int i = 0;
 
     while (i < keySayisi - 2 && keys[i + 1].t <= t)
@@ -753,6 +822,7 @@ void servoPoseGuncelle()
         u);
   }
 
+  // Pose değerlerini servo açılarına çevir
   float acilar[NUM_SERVOS];
 
   acilar[0] = 90.0f + p.body_yaw;
@@ -768,6 +838,7 @@ void servoPoseGuncelle()
       idleAci[4] -
       p.ear_right * (idleAci[4] - minAci[4]);
 
+  // Klip başındaki yumuşak geçiş ağırlığı (0 = eski açı, 1 = yeni açı)
   float w = 1.0f;
   unsigned long g = now - gecisZamani;
 
@@ -792,18 +863,19 @@ void servoPoseGuncelle()
     servoYaz(i, a);
   }
 
-  moving = false;
+  moving = false; // Pose animasyonu varken doğrusal hareket devre dışı
 }
 
 // =========================================================================
-// YÜZ ÇİZİM FONKSİYONLARI
+// Yüz çizimi
 // =========================================================================
 
+// Kaş çizer. aci: eğim (derece), icYon: +1 sol göz, -1 sağ göz
 void kasCiz(int cx, int y, float aci, int icYon)
 {
-  float yar = 30;
+  float yar = 30; // Kaşın yarı uzunluğu
 
-  float dy = sin(aci * 0.0174533f) * yar;
+  float dy = sin(aci * 0.0174533f) * yar; // Derece -> radyan
 
   int icX = cx + icYon * (int)yar;
   int disX = cx - icYon * (int)yar;
@@ -811,6 +883,7 @@ void kasCiz(int cx, int y, float aci, int icYon)
   int icY = y - (int)dy;
   int disY = y + (int)dy;
 
+  // 5 piksel kalınlık için kaydırılmış çizgiler
   for (int t = -2; t <= 2; t++)
   {
     cizgiCiz(
@@ -822,6 +895,7 @@ void kasCiz(int cx, int y, float aci, int icYon)
   }
 }
 
+// Hazırlanan agizYv eğrisini noktalar halinde çizer
 void agizCiz()
 {
   int cx = 160;
@@ -838,12 +912,14 @@ void agizCiz()
         cCizgi);
   }
 
+  // "y" şeklinde ağzın üstündeki dikey çizgi
   int bh = (int)(16 * kareR.mw[5]);
 
   if (bh > 0)
     kutuCiz(cx - 1, cy - bh, 3, bh, cCizgi);
 }
 
+// Verilen yüz durumunu (gözler, kaş, ağız, efektler) tampona çizer
 void yuzCiz(const YuzR &y)
 {
   int gozY = 100 + nefesPx;
@@ -852,6 +928,7 @@ void yuzCiz(const YuzR &y)
 
   int w = (int)(70 * y.eye_size);
 
+  // Göz yüksekliği (kırpma dahil) ve kaş konumu için kırpmasız yükseklik
   int h = max(
       5,
       (int)(70 * y.eye_size * y.eye_open * (1.0f - y.kapali)));
@@ -860,6 +937,7 @@ void yuzCiz(const YuzR &y)
       5,
       (int)(70 * y.eye_size * y.eye_open));
 
+  // Yanaklar (gözlerin altında pembe daire)
   if (y.blush > 0.02f)
   {
     uint16_t cYanak = karistir(cZemin, cPembe, y.blush);
@@ -878,6 +956,7 @@ void yuzCiz(const YuzR &y)
   {
     int cx = gozX[k];
 
+    // Göz yuvası
     yuvarlakKutuCiz(
         cx - w / 2,
         gozY - h / 2,
@@ -886,6 +965,7 @@ void yuzCiz(const YuzR &y)
         min(w, h) / 2,
         cCizgi);
 
+    // Göz bebeği yarıçapı; göz kapanırken küçülür
     int r = (int)(min(w, h) / 2 * 0.5f * y.pupil);
 
     float acikOran = constrain((h - 8) / 16.0f, 0.0f, 1.0f);
@@ -893,6 +973,7 @@ void yuzCiz(const YuzR &y)
 
     if (r >= 2)
     {
+      // Bebeğin gözün içinde kayabileceği en fazla mesafe
       int dx = max(
           0,
           (int)((w / 2 - r) * 0.8f));
@@ -906,6 +987,7 @@ void yuzCiz(const YuzR &y)
 
       daireCiz(ix, iy, r, cIris);
 
+      // Bebekteki ışık parıltısı
       if (y.sparkle > 0.3f)
       {
         daireCiz(
@@ -917,6 +999,7 @@ void yuzCiz(const YuzR &y)
     }
   }
 
+  // Kaşlar gözün üstünde, brow_height ile yükselir
   int kasY =
       gozY - hKas / 2 - 14 - (int)(y.brow_height * 40);
 
@@ -925,6 +1008,7 @@ void yuzCiz(const YuzR &y)
 
   agizCiz();
 
+  // Gözyaşları
   if (y.tears > 0)
   {
     for (int k = 0; k < 2; k++)
@@ -937,6 +1021,7 @@ void yuzCiz(const YuzR &y)
     }
   }
 
+  // Sağ üstteki öfke işareti (artı biçimli)
   if (y.anger > 0.02f)
   {
     uint16_t cOfke = karistir(cZemin, cKirmizi, y.anger);
@@ -950,20 +1035,23 @@ void yuzCiz(const YuzR &y)
 }
 
 // =========================================================================
-// KLİP OYNATMA FONKSİYONLARI
+// Klip oynatma
 // =========================================================================
 
+// no'ya ait klibi yükleyip oynatır. poseOynasin=false ise servolar sürülmez.
 bool klipOynat(int no, bool poseOynasin = true)
 {
   if (!klipYukle(klipler[no].json))
     return false;
 
+  // İlk açılışta yüz doğrudan ilk anahtardan başlar
   if (ilkYukleme)
   {
     kareR = yuzdenR(keys[0].yuz);
     ilkYukleme = false;
   }
 
+  // Yumuşak geçiş için mevcut yüz ve servo açıları saklanır
   gecisR = kareR;
 
   for (int i = 0; i < NUM_SERVOS; i++)
@@ -989,7 +1077,8 @@ bool klipOynat(int no, bool poseOynasin = true)
 
   return true;
 }
-// Türkçe harf UTF-8'de 2 bayttır. Tanırsa ASCII karşılığını döner, yoksa 0.
+
+// UTF-8'de 2 baytlık Türkçe harfi ASCII karşılığına çevirir, tanımazsa 0 döner
 char turkceHarf(unsigned char c, unsigned char d)
 {
   if (c == 0xC3)
@@ -1017,7 +1106,7 @@ char turkceHarf(unsigned char c, unsigned char d)
   return 0;
 }
 
-// "Derın_Uyku" -> "derin_uyku" (Türkçe harfleri ASCII yapar, küçültür)
+// Klip adını küçük harfli ASCII'ye çevirir: "Derın_Uyku" -> "derin_uyku"
 void adiSadelestir(const char *kaynak, char *hedef, int hedefBoyut)
 {
   int j = 0;
@@ -1038,6 +1127,8 @@ void adiSadelestir(const char *kaynak, char *hedef, int hedefBoyut)
 
   hedef[j] = 0;
 }
+
+// Adı verilen klibi bulup oynatır; bulunamazsa false döner
 bool klipAdiylaOynat(const char *ad)
 {
   char temiz[40];
@@ -1055,15 +1146,17 @@ bool klipAdiylaOynat(const char *ad)
 }
 
 // =========================================================================
-// YENİ KARE HAZIRLAMA
+// Kare hazırlama ve blok çizimi
 // =========================================================================
 
+// Klibin o anki zamanına göre yeni yüz karesini hesaplar
 void kareHazirla()
 {
   unsigned long now = millis();
 
   unsigned long t = now - klipBaslangic;
 
+  // Klip bitti: döngüsel klipse başa sar, değilse idle'a dön
   if (t >= klipSuresi)
   {
     if (idleOynuyor || idleKlipNo < 0)
@@ -1091,6 +1184,7 @@ void kareHazirla()
   }
   else
   {
+    // t'yi kapsayan anahtar çiftini bul ve aralarında ara değer al
     int i = 0;
 
     while (i < keySayisi - 2 && keys[i + 1].t <= t)
@@ -1112,6 +1206,7 @@ void kareHazirla()
         easeUygula(keys[i + 1].ease, u));
   }
 
+  // Klip başında önceki yüzden yeni yüze yumuşak geçiş
   unsigned long g = now - gecisZamani;
 
   if (g < GECIS_MS)
@@ -1126,28 +1221,26 @@ void kareHazirla()
     kareR = hedef;
   }
 
-  // göz kırpma ve nefes: hangi klip olursa olsun üstüne biner
+  // Göz kırpma ve nefes her klibin üstüne biner
   kareR.kapali = max(kareR.kapali, kirpmaDeger);
   nefesPx = (int)roundf(nefesDeger * NEFES_PIKSEL);
 
   agizHazirla();
 
-  seritY = 0;
+  blokNo = 0;
 
   kareCiziliyor = true;
 }
 
-// =========================================================================
-// EKRANA ŞERİT ÇİZME
-// =========================================================================
-
+// Tamponun FNV-1a özetini hesaplar (içerik değişti mi kontrolü için)
 uint32_t canvasOzet()
 {
   const uint32_t *p = (const uint32_t *)canvas.getBuffer();
 
   uint32_t h = 2166136261u;
 
-  for (int i = 0; i < EKRAN_W * SERIT_H / 2; i++)
+  // Her 32 bit iki piksel içerir
+  for (int i = 0; i < BLOK_W * BLOK_H / 2; i++)
   {
     h = (h ^ p[i]) * 16777619u;
   }
@@ -1155,42 +1248,44 @@ uint32_t canvasOzet()
   return h;
 }
 
-void seritCiz()
+// Bir bloğu çizer; içeriği değişmediyse ekrana göndermez
+void blokCiz()
 {
+  blokX = (blokNo % BLOK_SUTUN) * BLOK_W;
+  blokY = (blokNo / BLOK_SUTUN) * BLOK_H;
+
   canvas.fillScreen(cZemin);
 
   yuzCiz(kareR);
 
-  int no = seritY / SERIT_H;
   uint32_t ozet = canvasOzet();
 
-  if (ozet != seritOzet[no])
+  if (ozet != blokOzet[blokNo])
   {
-    seritOzet[no] = ozet;
+    blokOzet[blokNo] = ozet;
 
     tft.drawRGBBitmap(
-        0,
-        seritY,
+        blokX,
+        blokY,
         canvas.getBuffer(),
-        EKRAN_W,
-        SERIT_H);
+        BLOK_W,
+        BLOK_H);
 
-    seritGonderilen++;
+    blokGonderilen++;
   }
 
-  seritY += SERIT_H;
+  blokNo++;
 
-  if (seritY >= EKRAN_H)
+  // Son blok bitti, kare tamamlandı
+  if (blokNo >= BLOK_TOPLAM)
   {
     kareCiziliyor = false;
     fpsSay++;
   }
 }
 
-// =========================================================================
-// EKRAN ANİMASYONU GÜNCELLEME
-// =========================================================================
-
+// Kare aralığı dolunca yeni kare hazırlar, hazırsa bir blok çizer.
+// Her çağrıda tek blok çizildiği için loop() uzun süre bloke olmaz.
 void klipGuncelle()
 {
   if (!kareCiziliyor)
@@ -1205,13 +1300,10 @@ void klipGuncelle()
     return;
   }
 
-  seritCiz();
+  blokCiz();
 }
 
-// =========================================================================
-// EKRAN BAŞLATMA
-// =========================================================================
-
+// Ekranı başlatır, renkleri hazırlar, idle/sleepy klip indekslerini bulur
 void ekranBaslat()
 {
   tft.begin(SPI_HIZ);
@@ -1248,9 +1340,10 @@ void ekranBaslat()
 }
 
 // =========================================================================
-// İLETİŞİM FONKSİYONLARI
+// Seri iletişim
 // =========================================================================
 
+// {"ack":seq,"ok":true} yanıtı gönderir
 void ackGonder(int seqNumarasi)
 {
   StaticJsonDocument<64> doc;
@@ -1263,6 +1356,7 @@ void ackGonder(int seqNumarasi)
   Serial.println();
 }
 
+// {"ack":seq,"ok":false,"err":kod} hata yanıtı gönderir
 void hataGonder(int seqNumarasi, const char *hataKodu)
 {
   StaticJsonDocument<96> doc;
@@ -1277,7 +1371,7 @@ void hataGonder(int seqNumarasi, const char *hataKodu)
 }
 
 // =========================================================================
-// SETUP
+// Setup ve loop
 // =========================================================================
 
 void setup()
@@ -1286,21 +1380,18 @@ void setup()
 
   sonMesajZamani = millis();
 
-  randomSeed(esp_random());
+  randomSeed(esp_random()); // Göz kırpma aralıkları için rastgele tohum
   sonNefesZamani = millis();
-  sonrakiKirpma = millis() + 3000;
+  sonrakiKirpma = millis() + 3000; // İlk kırpma 3 sn sonra
 
   motorlariBaslat();
 
   ekranBaslat();
 }
 
-// =========================================================================
-// LOOP
-// =========================================================================
-
 void loop()
 {
+  // Engellemeyen (non-blocking) görev güncellemeleri
   nefesGuncelle();
 
   servoGuncelle();
@@ -1309,8 +1400,7 @@ void loop()
 
   klipGuncelle();
 
-  // Seri porttan mesaj oku:
-  // JSON } karakterinde veya satır sonunda tamamlanır.
+  // Seri porttan mesaj oku: mesaj '}' karakterinde veya satır sonunda tamamlanır
   while (Serial.available() > 0)
   {
     char c = Serial.read();
@@ -1330,8 +1420,7 @@ void loop()
     {
       gelenSatir += c;
 
-      // Çok uzun (bozuk) mesaj belleği şişirmesin: 256 karakteri geçerse
-      // biriken mesajı at ve bad_json dön (Onur'un kodundaki koruma).
+      // Bozuk ve çok uzun mesaj belleği şişirmesin: 256 karakteri aşarsa at
       if (gelenSatir.length() > 256)
       {
         gelenSatir = "";
@@ -1356,7 +1445,7 @@ void loop()
         }
         else
         {
-          int seq = doc["seq"] | 0; // Sözleşme: numarasız mesajda 0
+          int seq = doc["seq"] | 0; // Numarasız mesajda seq = 0
 
           const char *cmd = doc["cmd"];
 
@@ -1365,6 +1454,7 @@ void loop()
             hataGonder(seq, "bad_cmd");
           }
 
+          // ping: bağlantı canlı mı kontrolü
           else if (strcmp(cmd, "ping") == 0)
           {
             sonMesajZamani = millis();
@@ -1374,6 +1464,7 @@ void loop()
             ackGonder(seq);
           }
 
+          // neutral: yüz idle, servolar nötr konuma
           else if (strcmp(cmd, "neutral") == 0)
           {
             sonMesajZamani = millis();
@@ -1392,6 +1483,7 @@ void loop()
             ackGonder(seq);
           }
 
+          // move: {"deg":[5 açı],"ms":süre} servoları doğrudan hareket ettirir
           else if (strcmp(cmd, "move") == 0)
           {
             if (!doc.containsKey("deg") ||
@@ -1416,6 +1508,7 @@ void loop()
 
                 bool sinirDisi = false;
 
+                // Her açı kendi servosunun sınırları içinde olmalı
                 for (int i = 0; i < 5; i++)
                 {
                   acilar[i] = degArray[i];
@@ -1447,6 +1540,7 @@ void loop()
             }
           }
 
+          // anim: {"name":klip_adı} adıyla klip oynatır
           else if (strcmp(cmd, "anim") == 0)
           {
             const char *ad = doc["name"];
@@ -1477,21 +1571,22 @@ void loop()
   }
 
 #if FPS_YAZ
+  // Her 2 sn'de bir fps ve gönderilen blok sayısını yazdır
   if (millis() - fpsZaman >= 2000)
   {
     Serial.printf(
-        "\nfps: %.1f, gonderilen serit: %lu / %lu\n",
+        "\nfps: %.1f, gonderilen blok: %lu / %lu\n",
         fpsSay / 2.0f,
-        seritGonderilen,
-        fpsSay * (EKRAN_H / SERIT_H));
+        blokGonderilen,
+        fpsSay * BLOK_TOPLAM);
 
     fpsSay = 0;
-    seritGonderilen = 0;
+    blokGonderilen = 0;
     fpsZaman = millis();
   }
 #endif
 
-  // mesaj gelmezse uykuya dal: servolar nötre, yüz sleepy, nefes devam
+  // Mesaj gelmezse uykuya dal: servolar nötre, yüz sleepy, nefes devam eder
   if (sigortaDevredeMi &&
       (millis() - sonMesajZamani > UYKU_SURE_MS))
   {
