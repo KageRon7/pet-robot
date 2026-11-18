@@ -2,20 +2,24 @@ import asyncio
 import time
 
 from router.animasyon import animasyon_oynat, kapat
-from router.beyin_istemcisi import BaglamTutucu, beyne_sor
+from router.beyin_istemcisi import BaglamTutucu, beyne_sor, tik_sor
 from tools.fake_events import SahteOlayUreteci
 
 # REFLEKS TABLOSU: olay -> (animasyon, süre sn). Beyne sormadan hemen oynar.
 # Sadece anında olması gereken tepkiler burada. Diğer olaylara (üzgün, esneme, sinirli...)
-# beyin (brain/kurallar.py) karar verir; refleks eklenirse kedi taklit eder ve beynin
+# beyin (brain/davranis.py) karar verir; refleks eklenirse kedi taklit eder ve beynin
 # kararıyla üst üste iki animasyon gider (Ferhat'ın kararı, 13 Kasım).
 REFLEKS_TABLOSU = {
     "user_arrived": ("idle", 0.0),
     "smile": ("smile", 1.5),
 }
 
+TIK_ARALIGI_S = 1.0  # davranış beyni ~1 sn'de bir tik bekliyor
+AYNI_KARAR_S = 3.0  # aynı karar bu süre içinde ikinci kez gelirse tekrar oynatılmaz
+
 # Arka plandaki beyin görevleri; referansı tutmazsak Python görevi silebilir.
 ARKA_GOREVLER: set[asyncio.Task] = set()
+_son_oynanan: tuple[object, float] | None = None  # (karar, time.monotonic())
 
 
 def ad_al(deger) -> str:
@@ -29,11 +33,9 @@ def arka_planda(coro) -> None:
     gorev.add_done_callback(ARKA_GOREVLER.discard)
 
 
-async def sor_ve_oyna(baglam_nesnesi) -> None:
-    # Beyne sorar; cevap (Decision) gelirse karar animasyonunu oynatır, gelmezse refleksle devam.
-    cevap = await beyne_sor(baglam_nesnesi)
-    if cevap is None:
-        return
+async def karari_oyna(cevap, kaynak: str) -> None:
+    # Beynin kararını (Decision) oynatır. Tik ve olay aynı kararı verirse ikincisi atlanır.
+    global _son_oynanan
     try:
         duygu = ad_al(cevap.emotion)
         sure = float(cevap.duration_s)
@@ -44,8 +46,32 @@ async def sor_ve_oyna(baglam_nesnesi) -> None:
         print(f"[ROUTER] saçma cevap {cevap!r} ({hata!r}), idle'a dönülüyor")
         await animasyon_oynat("idle", kaynak="hata")
         return
-    print(f"[ROUTER] karar     <- {duygu}{f' klip={klip}' if klip else ''} ({sebep})")
-    await animasyon_oynat(duygu, kaynak="karar", sure_s=sure, klip=klip)
+    simdi = time.monotonic()
+    if _son_oynanan is not None and _son_oynanan[0] == cevap and simdi - _son_oynanan[1] < AYNI_KARAR_S:
+        return  # aynı karar az önce oynadı (tik işlediyse olay yolu tekrar getirir)
+    _son_oynanan = (cevap, simdi)
+    print(f"[ROUTER] {kaynak:<9} <- {duygu}{f' klip={klip}' if klip else ''} ({sebep})")
+    await animasyon_oynat(duygu, kaynak=kaynak, sure_s=sure, klip=klip)
+
+
+async def sor_ve_oyna(baglam_nesnesi) -> None:
+    # Beyne sorar; cevap gelirse oynatır, gelmezse (None) çalan animasyon sürer.
+    cevap = await beyne_sor(baglam_nesnesi)
+    if cevap is not None:
+        await karari_oyna(cevap, "karar")
+
+
+async def tik_dongusu(baglam: BaglamTutucu, aralik_s: float = TIK_ARALIGI_S) -> None:
+    # ~1 sn'de bir davranış beynine sorar: sıkılma, uyku, ilgi isteme, kendiliğinden eylemler buradan gelir.
+    while True:
+        await asyncio.sleep(aralik_s)
+        try:
+            karar = await tik_sor(baglam.olustur(time.time()))
+            if karar is not None:
+                await karari_oyna(karar, "tik")
+        except Exception as hata:
+            # Tik bozulsa da router durmasın.
+            print(f"[ROUTER] tik HATA: {hata!r}")
 
 
 async def mesaji_isle(mesaj, baglam: BaglamTutucu) -> None:
@@ -66,8 +92,9 @@ async def mesaji_isle(mesaj, baglam: BaglamTutucu) -> None:
         arka_planda(sor_ve_oyna(baglam.olustur(simdi)))
 
 
-async def router(kuyruk: asyncio.Queue) -> None:
-    baglam = BaglamTutucu()
+async def router(kuyruk: asyncio.Queue, baglam: BaglamTutucu | None = None) -> None:
+    # baglam dışarıdan verilirse tik görevi de aynı bağlamı kullanır.
+    baglam = baglam or BaglamTutucu()
     while True:
         mesaj = await kuyruk.get()
         try:
@@ -82,11 +109,13 @@ async def router(kuyruk: asyncio.Queue) -> None:
 
 async def main(sure_s: float = 15, hiz: float = 20) -> None:
     kuyruk: asyncio.Queue = asyncio.Queue(maxsize=100)
-    # Sahte üretecin B2 kararları kapalı: karar beyinden (brain/kurallar.py) geliyor.
+    baglam = BaglamTutucu()
+    # Sahte üretecin B2 kararları kapalı: karar beyinden (brain/davranis.py) geliyor.
     uretec = SahteOlayUreteci(tohum=42, hiz=hiz, kanallar=("A2",))
     gorevler = [
         asyncio.create_task(uretec.kuyruga_aktar(kuyruk, sure_s=300)),
-        asyncio.create_task(router(kuyruk)),
+        asyncio.create_task(router(kuyruk, baglam)),
+        asyncio.create_task(tik_dongusu(baglam)),
     ]
     try:
         await asyncio.sleep(sure_s)
