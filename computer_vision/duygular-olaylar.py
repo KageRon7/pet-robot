@@ -12,8 +12,15 @@ Faz 2 (YENİ) olayları:
     second_face_gone       ikinci yüz gitti
     hand_wave              el sallama (selam)
     thumbs_up              baş parmak yukarı (okey)
+    middle_finger          orta parmak çekme
+    stop                   dik açık avuç, kıpırdamadan (dur işareti)
+    shush                  işaret parmağı ağzın önünde (şşş)
+    salute                 el alında, yatay (selam verme)
     answer_yes             kafa sallama, evet (yukarı-aşağı)
     answer_no              kafa sallama, hayır (sağa-sola)
+    object_appeared        listedeki bir nesne görüntüye girdi   (olayda ekstra "label" alanı)
+    object_gone            o nesne görüntüden çıktı              (label)
+    object_shown           nesne elle kameraya doğru tutuluyor   (label)
 A1 face_track mesajına YENİ alanlar: head_dir (left/right/up/down/center), head_yaw, head_pitch.
 
 Kurulum:
@@ -74,6 +81,11 @@ EL_MODEL_URL = (
     "https://storage.googleapis.com/mediapipe-models/gesture_recognizer/"
     "gesture_recognizer/float16/1/gesture_recognizer.task"
 )
+OBJ_MODEL_URL = (
+    "https://storage.googleapis.com/mediapipe-models/object_detector/"
+    "efficientdet_lite0/float16/1/efficientdet_lite0.tflite"
+)
+OBJ_MODEL_PATH = "efficientdet_lite0.tflite"
 EL_MODEL_PATH = "gesture_recognizer.task"   # el landmark'ları + hazır hareketler (Thumb_Up, Open_Palm...)
 
 # ---- Eşikler (hepsi ilk tahmin, kendi yüzünde test edip ayarla) ----
@@ -153,6 +165,26 @@ IKINCI_GITTI_SN = 3.0
 # thumbs_up: GestureRecognizer "Thumb_Up" skoru (0–1)
 THUMB_AC, THUMB_KAPAT, THUMB_MIN_SN = 0.6, 0.4, 0.5
 
+# middle_finger: orta parmak uzanık, işaret/yüzük/serçe kıvrık (landmark geometrisi, hazır hareket yok)
+ORTA_AC, ORTA_KAPAT, ORTA_MIN_SN = 0.6, 0.4, 0.5
+ORTA_UZANMA = 1.15        # orta parmak ucu, PIP'e göre bilekten en az bu kadar uzakta olmalı
+ORTA_FARK = 1.25          # orta parmak ucu, diğer parmak uçlarının en uzağından en az bu kadar uzak
+
+# stop: dik duran açık avuç, kıpırdamadan (sallama değil). Avuç merkezi pencerede en fazla bu kadar oynar.
+STOP_AC, STOP_KAPAT, STOP_MIN_SN = 0.6, 0.4, 0.4
+STOP_PENCERE_SN = 0.6
+STOP_HAREKET_MAX = 0.25   # el boyu biriminde
+
+# shush (şşş): işaret parmağı uzanık, diğerleri kıvrık, parmak ucu ağza yakın
+SUS_AC, SUS_KAPAT, SUS_MIN_SN = 0.6, 0.4, 0.5
+SUS_MESAFE = 0.25         # parmak ucu - ağız mesafesi, yüz yüksekliğinin katı olarak en fazla
+
+# salute (selam verme): yatay duran açık el, parmak ucu alın/şakak bölgesinde
+SELAM_AC, SELAM_KAPAT, SELAM_MIN_SN = 0.6, 0.4, 0.6
+SELAM_X_PAY = 0.4         # yüz kutusunun yanlarına bu oranda pay
+SELAM_Y_YUKARI = 0.3      # yüz kutusunun üstünden bu kadar yukarı (yüz yüksekliği katı)
+SELAM_Y_ASAGI = 0.4       # yüz kutusunun üstünden bu kadar aşağı (alın + kaş hizası)
+
 # hand_wave: açık avuç merkezinin yatay salınımı (el boyu biriminde)
 WAVE_PENCERE_SN = 1.5
 WAVE_GENLIK = 0.4         # bir salınımın en az büyüklüğü (el boyunun katı)
@@ -166,6 +198,51 @@ SHAKE_GENLIK = 7.0        # sağa-sola salınım en az bu kadar derece
 SALLAMA_DONUS = 3         # pencerede en az bu kadar yön değişimi
 SALLAMA_BEKLEME_SN = 2.0
 
+# Nesne algılama (COCO sınıfları). Sadece bu listedekiler olay üretir.
+OBJ_LISTE = {
+    "cup", "bottle", "cell phone", "sports ball", "teddy bear", "bear", "laptop", "book",
+    "remote", "game controller", "scissors", "backpack", "umbrella", "apple", "banana",
+    "orange", "bowl",
+}
+# COCO'da oyun kolu sınıfı yok: telefon, oyun kolu ve kumanda hep "remote"/"cell phone" çıkıyor.
+# "remote" diyen tespiti kutunun en/boy oranına göre ayırıyoruz (uzun kenar / kısa kenar):
+#   >= OBJ_KUMANDA_ORAN  ince uzun  -> remote (TV kumandası)
+#   >= OBJ_TELEFON_ORAN  orta       -> cell phone
+#   daha küçük           kısa kalın -> game controller
+# Ham oranı test penceresinde panelde gösteriyoruz, kendi nesnelerine göre ayarla.
+OBJ_KUMANDA_ORAN = 3.0
+OBJ_TELEFON_ORAN = 1.8
+
+
+def obj_etiket(ad, bb):
+    """Dedektörün etiketini düzeltir. Sadece 'remote' için kutu oranına bakar. (etiket, oran)."""
+    if ad != "remote":
+        return ad, None
+    kisa, uzun = min(bb.width, bb.height), max(bb.width, bb.height)
+    if kisa <= 0:
+        return ad, None
+    oran = uzun / kisa
+    if oran >= OBJ_KUMANDA_ORAN:
+        return "remote", oran
+    if oran >= OBJ_TELEFON_ORAN:
+        return "cell phone", oran
+    return "game controller", oran
+OBJ_SKOR_ESIK = 0.4       # dedektörün kendi alt skoru; olay için ayrıca confidence >= 0.6 gerekir
+OBJ_HER_N_KARE = 3        # dedektör her N karede bir çalışır (FPS için), ~10 Hz
+OBJ_GELDI_SN = 1.0        # nesne bu kadar sn kararlı görünürse object_appeared
+OBJ_GITTI_SN = 3.0        # bu kadar sn görünmezse object_gone
+OBJ_BOSLUK_SN = 0.5       # bu kadar kısa kayıplar "kesintisiz" sayılır
+OBJ_SHOWN_EL = 0.2        # object_shown: el boyutu (hand_near'a yakın) en az bu kadar
+OBJ_SHOWN_ORTUSME = 0.4   # object_shown: nesne kutusunun en az bu kadarı elin kutusunda
+OBJ_SHOWN_SN = 0.5        # object_shown: bu kadar sn tutulmalı
+OBJ_KUTU_CIZ = True       # test penceresinde nesne kutularını videonun üstüne de çiz (False = sadece sağ panel)
+
+# El/nesne yüzün yakınındayken (telefonu sallamak gibi) yüz takibi bozulur ve sahte baş sallama
+# çıkar. Bu sırada answer_yes / answer_no üretilmez.
+SALLAMA_ENGEL_ORTUSME = 0.2   # el/nesne kutusunun en az bu kadarı genişletilmiş yüz bölgesine giriyorsa engelle
+SALLAMA_ENGEL_GENISLET = 0.3  # yüz kutusu her yöne bu oranda genişletilir
+SALLAMA_ENGEL_SN = 0.7        # engel kalkınca bu kadar sn daha bekle
+
 
 def indir(url, yol):
     if not os.path.exists(yol):
@@ -174,14 +251,19 @@ def indir(url, yol):
         print("Tamam:", yol, file=sys.stderr)
 
 
-SON_OLAY = ["", -1e9]   # test penceresinde göstermek için son gönderilen olay
+# Test penceresinde göstermek için son gönderilen olaylar.
+SON_OLAY = ["", -1e9]         # nesne dışı olaylar (sol alt, küçük yazı)
+SON_NESNE_OLAY = ["", -1e9]   # object_* olayları (sağ panelde, nesne listesinin altında)
 
 
-def olay_gonder(event, t, confidence, duration_s):
+def olay_gonder(event, t, confidence, duration_s, label=None):
     """A2 mesajını üretir. Şimdilik konsola yazar; sonra router'a gönderme buraya gelecek."""
     if confidence < MIN_CONFIDENCE:
         return
-    SON_OLAY[0], SON_OLAY[1] = event, time.time()
+    if event.startswith("object_"):
+        SON_NESNE_OLAY[0], SON_NESNE_OLAY[1] = f"{event} ({label})", time.time()
+    else:
+        SON_OLAY[0], SON_OLAY[1] = event, time.time()
     mesaj = {
         "type": "event",
         "t": round(t, 2),
@@ -189,6 +271,8 @@ def olay_gonder(event, t, confidence, duration_s):
         "confidence": round(min(confidence, 1.0), 2),
         "duration_s": round(duration_s, 2),
     }
+    if label is not None:
+        mesaj["label"] = label
     print(json.dumps(mesaj), flush=True)
 
 
@@ -322,6 +406,72 @@ def avuc_acik(el, ad, skor, gen, yuk):
     return uzanan >= 4
 
 
+def orta_parmak(el, gen, yuk):
+    """Orta parmak çekme: orta parmak uzanık, işaret/yüzük/serçe kıvrık (baş parmak serbest).
+
+    Skor 1.0 (jest var) ya da 0.0. Mesafeler bilek (0) noktasından ölçülür.
+    """
+    def mesafe(i):
+        return math.hypot((el[i].x - el[0].x) * gen, (el[i].y - el[0].y) * yuk)
+    if mesafe(12) <= ORTA_UZANMA * mesafe(10):
+        return 0.0
+    for uc, pip in ((8, 6), (16, 14), (20, 18)):
+        if mesafe(uc) >= mesafe(pip):           # kıvrık parmak: ucu PIP'ten uzakta olmaz
+            return 0.0
+    if mesafe(12) < ORTA_FARK * max(mesafe(8), mesafe(16), mesafe(20)):
+        return 0.0
+    return 1.0
+
+
+def sus_isareti(el, yuz, yuz_kutusu, gen, yuk):
+    """Şşş: işaret parmağı uzanık, orta/yüzük/serçe kıvrık, parmak ucu ağzın yanında."""
+    def mesafe(i):
+        return math.hypot((el[i].x - el[0].x) * gen, (el[i].y - el[0].y) * yuk)
+    if mesafe(8) <= 1.15 * mesafe(6):
+        return False
+    for uc, pip in ((12, 10), (16, 14), (20, 18)):
+        if mesafe(uc) >= mesafe(pip):
+            return False
+    agiz_x = (yuz[13].x + yuz[14].x) / 2
+    agiz_y = (yuz[13].y + yuz[14].y) / 2
+    yuz_yuk_px = (yuz_kutusu[3] - yuz_kutusu[1]) * yuk
+    if yuz_yuk_px <= 0:
+        return False
+    d = math.hypot((el[8].x - agiz_x) * gen, (el[8].y - agiz_y) * yuk)
+    return d / yuz_yuk_px <= SUS_MESAFE
+
+
+def selam_konumu(uc, yuz_kutusu):
+    """Parmak ucu (landmark) alın/şakak bölgesinde mi (selam verme konumu)."""
+    w, h = yuz_kutusu[2] - yuz_kutusu[0], yuz_kutusu[3] - yuz_kutusu[1]
+    return (yuz_kutusu[0] - SELAM_X_PAY * w <= uc.x <= yuz_kutusu[2] + SELAM_X_PAY * w
+            and yuz_kutusu[1] - SELAM_Y_YUKARI * h <= uc.y <= yuz_kutusu[1] + SELAM_Y_ASAGI * h)
+
+
+class ElDurgun:
+    """stop: avuç merkezi son STOP_PENCERE_SN boyunca neredeyse sabit mi."""
+
+    def __init__(self):
+        self.ornekler = []
+        self.son_gorulme = 0.0
+
+    def guncelle(self, x, y, simdi):
+        if x is None:
+            if simdi - self.son_gorulme > 0.3:
+                self.ornekler.clear()
+            return False
+        self.son_gorulme = simdi
+        self.ornekler.append((simdi, x, y))
+        while simdi - self.ornekler[0][0] > STOP_PENCERE_SN:
+            self.ornekler.pop(0)
+        if simdi - self.ornekler[0][0] < 0.8 * STOP_PENCERE_SN:
+            return False
+        xs = [o[1] for o in self.ornekler]
+        ys = [o[2] for o in self.ornekler]
+        return (max(xs) - min(xs) <= STOP_HAREKET_MAX
+                and max(ys) - min(ys) <= STOP_HAREKET_MAX)
+
+
 class ElSallama:
     """hand_wave: açık avucun yatay salınımı. Tek kez gönderilir, sonra WAVE_BEKLEME_SN bekler."""
 
@@ -387,6 +537,63 @@ class BasSallama:
         olay_gonder(self.ad, ilk, min(1.0, 0.5 + 0.15 * donus), simdi - ilk)
         self.durdur(simdi + SALLAMA_BEKLEME_SN)
         return True
+
+
+class ObjeTakip:
+    """object_appeared / object_gone / object_shown (etiket başına ayrı durum).
+
+    tespitler: {etiket: (skor, kutu)}, o dedektör geçişindeki en iyi tespit.
+    object_shown: nesne kutusu elin kutusuyla örtüşüyor ve el yeterince yakın.
+    """
+
+    def __init__(self):
+        self.d = {}
+
+    def _durum(self, etiket):
+        return self.d.setdefault(etiket, {
+            "gorunme_basi": None, "son_gorulme": -1e9, "zirve": 0.0, "bildirildi": False,
+            "tut_basi": None, "tut_son": -1e9, "tut_bildirildi": False,
+        })
+
+    def guncelle(self, tespitler, el_kutulari, el_boyut, simdi):
+        for etiket in set(tespitler) | set(self.d):
+            d = self._durum(etiket)
+            t = tespitler.get(etiket)
+            if t is not None:
+                skor, kt = t
+                d["son_gorulme"] = simdi
+                if d["gorunme_basi"] is None:
+                    d["gorunme_basi"] = simdi
+                    d["zirve"] = skor
+                d["zirve"] = max(d["zirve"], skor)
+                if (not d["bildirildi"] and simdi - d["gorunme_basi"] >= OBJ_GELDI_SN
+                        and d["zirve"] >= MIN_CONFIDENCE):
+                    d["bildirildi"] = True
+                    olay_gonder("object_appeared", d["gorunme_basi"], d["zirve"],
+                                simdi - d["gorunme_basi"], etiket)
+                tutuluyor = el_boyut >= OBJ_SHOWN_EL and any(
+                    ortusme(ek, kt) >= OBJ_SHOWN_ORTUSME for ek in el_kutulari)
+                if tutuluyor:
+                    d["tut_son"] = simdi
+                    if d["tut_basi"] is None:
+                        d["tut_basi"] = simdi
+                    if (not d["tut_bildirildi"] and simdi - d["tut_basi"] >= OBJ_SHOWN_SN
+                            and skor >= MIN_CONFIDENCE):
+                        d["tut_bildirildi"] = True
+                        olay_gonder("object_shown", d["tut_basi"], skor,
+                                    simdi - d["tut_basi"], etiket)
+                elif simdi - d["tut_son"] > OBJ_BOSLUK_SN:
+                    d["tut_basi"] = None
+                    d["tut_bildirildi"] = False
+            else:
+                if simdi - d["son_gorulme"] > OBJ_BOSLUK_SN:
+                    d["gorunme_basi"] = None
+                    d["tut_basi"] = None
+                    d["tut_bildirildi"] = False
+                if d["bildirildi"] and simdi - d["son_gorulme"] >= OBJ_GITTI_SN:
+                    d["bildirildi"] = False
+                    olay_gonder("object_gone", d["son_gorulme"], 1.0,
+                                simdi - d["son_gorulme"], etiket)
 
 
 class BasYonu:
@@ -641,6 +848,12 @@ def kutu_merkezi(k):
     return (k[0] + k[2]) / 2, (k[1] + k[3]) / 2
 
 
+def genislet(k, oran):
+    """Kutuyu her yöne genişliğinin/yüksekliğinin `oran` katı kadar büyütür."""
+    w, h = k[2] - k[0], k[3] - k[1]
+    return (k[0] - w * oran, k[1] - h * oran, k[2] + w * oran, k[3] + h * oran)
+
+
 def birincil_yuz(yuzler, onceki_merkez):
     """Kullanıcının yüzünü seçer. Önceki merkez biliniyorsa ona en yakın, yoksa en büyük yüz."""
     kutular = [kutu(y) for y in yuzler]
@@ -692,6 +905,7 @@ def main():
 
     indir(MODEL_URL, MODEL_PATH)
     indir(EL_MODEL_URL, EL_MODEL_PATH)
+    indir(OBJ_MODEL_URL, OBJ_MODEL_PATH)
 
     secenekler = vision.FaceLandmarkerOptions(
         base_options=mp_python.BaseOptions(model_asset_path=MODEL_PATH),
@@ -710,6 +924,13 @@ def main():
         min_hand_detection_confidence=0.5,
         min_hand_presence_confidence=0.5,
         min_tracking_confidence=0.5,
+    )
+
+    obj_secenekleri = vision.ObjectDetectorOptions(
+        base_options=mp_python.BaseOptions(model_asset_path=OBJ_MODEL_PATH),
+        running_mode=vision.RunningMode.VIDEO,
+        max_results=10,
+        score_threshold=OBJ_SKOR_ESIK,
     )
 
     kamera = cv2.VideoCapture(0)
@@ -731,7 +952,17 @@ def main():
     ikinci = IkinciYuz()
     bas_yonu = BasYonu()
     isik = IsikTakip()
+    nesne_takip = ObjeTakip()
+    son_nesneler = {}       # son dedektör geçişi: {etiket: (skor, kutu)}
+    son_oranlar = {}        # "remote" kaynaklı etiketlerin ham kutu oranı (sadece panelde gösterilir)
+    kare_sayac = 0
+    engel_son_t = -1e9      # el/nesne yüzün yakınında en son ne zaman görüldü
     thumbs_up = SureliOlay("thumbs_up", THUMB_AC, THUMB_KAPAT, THUMB_MIN_SN)
+    orta_parmak_olay = SureliOlay("middle_finger", ORTA_AC, ORTA_KAPAT, ORTA_MIN_SN)
+    stop_olay = SureliOlay("stop", STOP_AC, STOP_KAPAT, STOP_MIN_SN)
+    sus_olay = SureliOlay("shush", SUS_AC, SUS_KAPAT, SUS_MIN_SN)
+    selam_olay = SureliOlay("salute", SELAM_AC, SELAM_KAPAT, SELAM_MIN_SN)
+    el_durgun = ElDurgun()
     el_sallama = ElSallama()
     sallama_yes = BasSallama("answer_yes", NOD_GENLIK)
     sallama_no = BasSallama("answer_no", SHAKE_GENLIK)
@@ -760,7 +991,8 @@ def main():
     son_ts = -1
 
     with vision.FaceLandmarker.create_from_options(secenekler) as landmarker, \
-            vision.GestureRecognizer.create_from_options(el_secenekleri) as el_lm:
+            vision.GestureRecognizer.create_from_options(el_secenekleri) as el_lm, \
+            vision.ObjectDetector.create_from_options(obj_secenekleri) as obj_det:
         while True:
             ok, kare = kamera.read()
             if not ok:
@@ -795,6 +1027,10 @@ def main():
             el_kutulari = []
             el_boyut = 0.0
             thumb_skor = 0.0
+            orta_skor = 0.0
+            sus_skor = 0.0
+            selam_skor = 0.0
+            durgun_x = durgun_y = None
             sallama_x = None
             for idx, el in enumerate(el_sonuc.hand_landmarks):
                 el_kutulari.append(kutu(el))
@@ -806,12 +1042,51 @@ def main():
                     hareket_skor = el_sonuc.gestures[idx][0].score
                 if hareket == "Thumb_Up":
                     thumb_skor = max(thumb_skor, hareket_skor)
+                orta_skor = max(orta_skor, orta_parmak(el, gen, yuk))
+                if yuz_var and sus_isareti(el, sonuc.face_landmarks[ana_i], ana_kutu, gen, yuk):
+                    sus_skor = 1.0
                 if boyut_px > 0 and avuc_acik(el, hareket, hareket_skor, gen, yuk):
                     merkez_x = sum(el[i].x for i in (0, 5, 9, 13, 17)) / 5 * gen
+                    merkez_y = sum(el[i].y for i in (0, 5, 9, 13, 17)) / 5 * yuk
                     sallama_x = merkez_x / boyut_px
+                    el_dx = (el[12].x - el[0].x) * gen
+                    el_dy = (el[0].y - el[12].y) * yuk
+                    if el_dy > abs(el_dx):
+                        # parmaklar yukarı bakıyor: stop adayı (kıpırdamıyorsa)
+                        durgun_x, durgun_y = sallama_x, merkez_y / boyut_px
+                    elif (abs(el_dx) > abs(el_dy) and ana_kutu is not None
+                          and selam_konumu(el[12], ana_kutu)):
+                        # el yatay ve parmak ucu alında: selam
+                        selam_skor = 1.0
             hand_near.guncelle(el_boyut, simdi)
             thumbs_up.guncelle(thumb_skor, simdi)
+            orta_parmak_olay.guncelle(orta_skor, simdi)
+            stop_skor = 1.0 if el_durgun.guncelle(durgun_x, durgun_y, simdi) else 0.0
+            stop_olay.guncelle(stop_skor, simdi)
+            sus_olay.guncelle(sus_skor, simdi)
+            selam_olay.guncelle(selam_skor, simdi)
             el_sallama.guncelle(sallama_x, simdi)
+
+            # --- Nesne algılama (her OBJ_HER_N_KARE karede bir) ---
+            kare_sayac += 1
+            if kare_sayac % OBJ_HER_N_KARE == 0:
+                obj_sonuc = obj_det.detect_for_video(mp_kare, ts)
+                son_nesneler = {}
+                for det in obj_sonuc.detections:
+                    kat = det.categories[0]
+                    bb = det.bounding_box
+                    ad, oran = obj_etiket(kat.category_name, bb)
+                    if ad not in OBJ_LISTE:
+                        continue
+                    k = (bb.origin_x / gen, bb.origin_y / yuk,
+                         (bb.origin_x + bb.width) / gen, (bb.origin_y + bb.height) / yuk)
+                    if ad not in son_nesneler or kat.score > son_nesneler[ad][0]:
+                        son_nesneler[ad] = (kat.score, k)
+                        if oran is not None:
+                            son_oranlar[ad] = oran
+                        else:
+                            son_oranlar.pop(ad, None)
+                nesne_takip.guncelle(son_nesneler, el_kutulari, el_boyut, simdi)
             if hand_near.aktif:
                 son_el_yakin_t = simdi
             el_yakin = simdi - son_el_yakin_t < EL_YAKIN_BEKLE_SN
@@ -914,6 +1189,15 @@ def main():
                 asagi_skor = None
             head_down.guncelle(asagi_skor, simdi)
 
+            # El ya da nesne (telefon vb.) yüzün yakınındaysa yüz takibi bozulur: baş sallama arama.
+            if ana_kutu is not None:
+                genis = genislet(ana_kutu, SALLAMA_ENGEL_GENISLET)
+                engel_kutulari = el_kutulari + [v[1] for v in son_nesneler.values()]
+                if any(ortusme(genis, k) >= SALLAMA_ENGEL_ORTUSME for k in engel_kutulari):
+                    engel_son_t = simdi
+            if simdi - engel_son_t < SALLAMA_ENGEL_SN:
+                sal_yaw = sal_pitch = None
+
             # Kafa sallama: biri olay verirse diğeri susar.
             if sallama_yes.guncelle(sal_pitch, sal_yaw, simdi):
                 sallama_no.durdur(sallama_yes.bekleme_bitis)
@@ -945,6 +1229,27 @@ def main():
 
             # --- Sadece test için ekran bilgisi ---
             ekran = cv2.flip(kare, 1)
+            if OBJ_KUTU_CIZ:
+                for etiket, (skor, k) in son_nesneler.items():
+                    x1, x2 = int((1 - k[2]) * gen), int((1 - k[0]) * gen)   # ekran aynalı
+                    y1, y2 = int(k[1] * yuk), int(k[3] * yuk)
+                    cv2.rectangle(ekran, (x1, y1), (x2, y2), (255, 0, 255), 1)
+            # Nesneler: sağ üstte ayrı panel
+            panel = ["NESNELER"] + [
+                f"{e} {sk:.2f}" + (f"  oran {son_oranlar[e]:.1f}" if e in son_oranlar else "")
+                for e, (sk, _) in son_nesneler.items()]
+            if not son_nesneler:
+                panel = ["NESNELER: yok"]
+            for i, metin in enumerate(panel):
+                (tw, _), _ = cv2.getTextSize(metin, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 1)
+                cv2.putText(ekran, metin, (gen - tw - 10, 25 + i * 22),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 0, 255), 1)
+            # Son nesne olayı (object_appeared/gone/shown): panelin hemen altında, küçük yazı
+            if simdi - SON_NESNE_OLAY[1] < 3.0:
+                metin = SON_NESNE_OLAY[0]
+                (tw, _), _ = cv2.getTextSize(metin, cv2.FONT_HERSHEY_SIMPLEX, 0.4, 1)
+                cv2.putText(ekran, metin, (gen - tw - 10, 25 + len(panel) * 22 + 6),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 200, 0), 1)
             if yuz_guvenilir:
                 satir1 = f"gulme: {gulme:.2f}  cene: {cene:.2f}"
                 satir2 = f"goz kapali: {goz:.2f}  bakis: {merkez:.2f}"
@@ -985,9 +1290,10 @@ def main():
             if hand_near.aktif:
                 durum = (durum + "  EL YAKIN").strip()
             cv2.putText(ekran, durum, (10, 255), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 200, 255), 2)
-            if simdi - SON_OLAY[1] < 2.0:
-                cv2.putText(ekran, f"OLAY: {SON_OLAY[0]}", (10, 295),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 200, 0), 2)
+            # Son olay (nesne dışı: kafa sallama, gülme, el vb.): sol altta, küçük yazı
+            if simdi - SON_OLAY[1] < 3.0:
+                cv2.putText(ekran, f"olay: {SON_OLAY[0]}", (10, ekran.shape[0] - 38),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 200, 0), 1)
             yardim = ("[s] uzgun [a] sinirli [u] saskin kaydet  [c] kalibre   sablon: "
                       + (" ".join(sorted(sablonlar)) or "yok"))
             cv2.putText(ekran, yardim, (10, ekran.shape[0] - 12),
